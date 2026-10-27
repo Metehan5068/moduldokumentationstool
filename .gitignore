@@ -1,0 +1,13 @@
+# Lokale Daten: niemals committen
+module/
+notes/
+*.pdf
+INDEX.md
+
+# Lokale Planungsdokumente
+ENTWICKLUNGSPLAN.md
+
+# Umgebung / Build
+.env
+node_modules/
+dist/
