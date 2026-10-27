@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react';
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { LectureResponse } from '../shared/api';
 import { PdfCanvas } from './PdfCanvas';
 import { NotesSession, statusText } from './notes-session';
+import { useLecturePosition } from './use-lecture-position';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 const SPLIT_KEY = 'lecture-column-ratio';
@@ -25,6 +26,9 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
   const [jumpOpen, setJumpOpen] = useState(false);
   const [jumpValue, setJumpValue] = useState('1');
   const [jumpError, setJumpError] = useState(false);
+  const [completed, setCompleted] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completionError, setCompletionError] = useState<string>();
   const [, redraw] = useReducer((value: number) => value + 1, 0);
   const session = useMemo(() => loaded ? new NotesSession(id, loaded.detail.notes, loaded.detail.readOnlyError) : undefined, [loaded, id]);
   const scroll = useRef<HTMLDivElement>(null);
@@ -33,6 +37,15 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
   const jumpInput = useRef<HTMLInputElement>(null);
   const activePage = useRef(1);
   const drag = useRef(false);
+  const completionRequest = useRef<Promise<boolean> | undefined>(undefined);
+  const keyHandler = useRef<(event: KeyboardEvent) => void>(() => {});
+  const { flush: flushPosition, error: positionError } = useLecturePosition(id, loaded?.detail.state, loaded?.pdf.numPages ?? 0, { scroll, rows, notes, activePage }, setCurrentPage);
+
+  useEffect(() => {
+    const handle = (event: KeyboardEvent) => keyHandler.current(event);
+    window.addEventListener('keydown', handle);
+    return () => window.removeEventListener('keydown', handle);
+  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -43,14 +56,17 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', visibility);
     window.addEventListener('beforeunload', beforeUnload);
-    registerGuard(async () => { await session.flushAll(); return !session.hasUnsaved(); });
+    registerGuard(async () => {
+      const [completedSaved] = await Promise.all([completionRequest.current, session.flushAll(), flushPosition()]);
+      return completedSaved !== false && !session.hasUnsaved();
+    });
     return () => {
       unsubscribe(); registerGuard(undefined); session.dispose();
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('beforeunload', beforeUnload);
     };
-  }, [session, registerGuard]);
+  }, [session, registerGuard, flushPosition]);
 
   useEffect(() => {
     let disposed = false;
@@ -75,7 +91,7 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
           ratios.push(viewport.width / viewport.height);
           page.cleanup();
         }
-        if (!disposed) setLoaded({ detail, pdf, ratios });
+        if (!disposed) { setCompleted(detail.completed); setLoaded({ detail, pdf, ratios }); }
       } catch (err) {
         if (!disposed) {
           console.error('PDF konnte nicht geladen werden', err);
@@ -109,8 +125,7 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
         frame = 0;
         const top = container.getBoundingClientRect().top + 24;
         const index = rows.current.findIndex((row) => row && row.getBoundingClientRect().bottom > top);
-        if (document.activeElement?.tagName === 'TEXTAREA') setCurrentPage(activePage.current);
-        else if (index >= 0) { setCurrentPage(index + 1); activePage.current = index + 1; }
+        if (index >= 0) { setCurrentPage(index + 1); if (document.activeElement?.tagName !== 'TEXTAREA') activePage.current = index + 1; }
       });
     };
     container.addEventListener('scroll', updatePage, { passive: true });
@@ -120,10 +135,6 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
   useEffect(() => {
     if (jumpOpen) { jumpInput.current?.focus(); jumpInput.current?.select(); }
   }, [jumpOpen]);
-
-  useEffect(() => {
-    if (loaded) notes.current[0]?.focus({ preventScroll: true });
-  }, [loaded]);
 
   const goTo = (page: number) => {
     if (!loaded) return;
@@ -135,7 +146,7 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
     setCurrentPage(target);
   };
   const openJump = () => { setJumpValue(String(currentPage)); setJumpError(false); setJumpOpen(true); };
-  const onKeyDown = (event: ReactKeyboardEvent) => {
+  const onKeyDown = (event: KeyboardEvent) => {
     if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault(); goTo(activePage.current + (event.key === 'ArrowDown' ? 1 : -1));
     } else if (event.ctrlKey && event.key.toLowerCase() === 'g') {
@@ -144,21 +155,42 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
       event.preventDefault(); void session?.flushAll();
     } else if (event.key === 'Escape') {
       if (jumpOpen) { setJumpOpen(false); scroll.current?.focus(); }
-      else { (event.target as HTMLElement).blur(); scroll.current?.focus({ preventScroll: true }); }
+      else { if (event.target instanceof HTMLElement) event.target.blur(); scroll.current?.focus({ preventScroll: true }); }
     }
   };
+  keyHandler.current = onKeyDown;
   const active = new Set<number>();
   for (const page of visible) for (let i = Math.max(1, page - 2); i <= Math.min(loaded?.pdf.numPages ?? 0, page + 2); i++) active.add(i);
 
   return (
-    <main className="lecture-view" onKeyDown={onKeyDown}>
+    <main className="lecture-view">
       <header className="lecture-toolbar">
         <a href="#">← Übersicht</a>
         <h1>{loaded ? `${loaded.detail.module} · ${loaded.detail.title}` : 'Vorlesung'}</h1>
         {loaded && <button type="button" onClick={openJump}>Folie {currentPage} / {loaded.pdf.numPages}</button>}
+        {loaded && <label className="completed-toggle"><input type="checkbox" checked={completed} disabled={completing} onChange={async (event) => {
+          const next = event.target.checked;
+          const previous = completed;
+          setCompleted(next); setCompleting(true); setCompletionError(undefined);
+          const request = (async () => {
+            try {
+              const response = await fetch(`/api/lectures/${id}/completed`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ completed: next }) });
+              if (!response.ok) throw new Error();
+              return true;
+            } catch { setCompleted(previous); setCompletionError('Der Erledigt-Status konnte nicht gespeichert werden. Bitte erneut versuchen.'); return false; }
+            finally { setCompleting(false); }
+          })();
+          completionRequest.current = request;
+          await request;
+          if (completionRequest.current === request) completionRequest.current = undefined;
+        }} /> erledigt</label>}
         {session && <span role="status">{session.readOnlyError ? 'Schreibgeschützt' : statusText[session.summary()]}</span>}
       </header>
       <p className="draft-warning">Alt+↑/↓: Folie wechseln · Strg+G: Gehe zu Folie · Strg+S: sofort speichern · Esc: Notizfeld verlassen</p>
+      {completionError && <p className="bad" role="alert">{completionError}</p>}
+      {(positionError || loaded?.detail.stateError) && <div className="position-error" role="alert">{positionError ?? loaded?.detail.stateError}
+        {positionError && <button type="button" onClick={() => { void flushPosition(); }}>Leseposition erneut speichern</button>}
+      </div>}
       {session?.readOnlyError && <div className="notes-error" role="alert">
         <p>Notizdatei ist schreibgeschützt: {session.readOnlyError.message} Bitte die Datei reparieren und erneut prüfen.</p>
         <button type="button" onClick={async () => {

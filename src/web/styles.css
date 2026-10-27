@@ -52,9 +52,10 @@ a { color: inherit; text-underline-offset: 3px; }
 .lecture-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
 .lecture-toolbar h1 { flex: 1; font-size: 1.1rem; margin: 0; overflow-wrap: anywhere; }
 .draft-warning { margin: 0; padding: 10px 20px; font-size: 0.85rem; background: var(--card); color: var(--muted); border-bottom: 1px solid var(--border); }
-.lecture-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 16px; scrollbar-gutter: stable; }
+.lecture-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 0 16px; scrollbar-gutter: stable; }
 .slide-rows { position: relative; }
-.slide-row { display: grid; grid-template-columns: var(--split) minmax(0, 1fr); align-items: stretch; margin-bottom: 20px; scroll-margin-top: 12px; }
+/* Der Abstand gehört zur gemessenen Zeile: Auch Positionen zwischen Folien sind exakt speicherbar. */
+.slide-row { display: grid; grid-template-columns: var(--split) minmax(0, 1fr); align-items: stretch; padding-bottom: 20px; }
 .slide-card, .note-card { margin: 0; background: var(--card); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
 .slide-card { margin-right: 8px; padding: 12px; }
 .note-card { margin-left: 8px; padding: 12px; display: flex; flex-direction: column; }
@@ -79,3 +80,10 @@ a { color: inherit; text-underline-offset: 3px; }
 .notes-error p { margin: 0 0 8px; }
 .orphan-note { padding: 16px; }
 .orphan-note textarea { width: 100%; min-height: 120px; font: inherit; }
+.resume-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 28px; }
+.resume-card p { margin: 8px 0 0; color: var(--muted); }
+.resume-card a { padding: 10px 16px; border: 1px solid var(--border); border-radius: 6px; }
+.lecture-progress { font-size: 0.85rem; color: var(--muted); }
+.completed-toggle { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.position-error { padding: 10px 20px; color: var(--bad); }
+.position-error button { margin-left: 12px; }

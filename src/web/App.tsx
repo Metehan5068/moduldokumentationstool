@@ -51,6 +51,10 @@ function Overview() {
           {loading ? 'Liest ein …' : 'Neu einlesen'}
         </button>
       </header>
+      {overview?.resume && <section className="resume-card" aria-label="Weiter mit">
+        <div><strong>Weiter mit: {overview.resume.title}</strong><p>{overview.resume.module} · Folie {overview.resume.lastPage} von {overview.resume.pageCount}</p></div>
+        <a href={`#vorlesung/${overview.resume.id}`}>Öffnen</a>
+      </section>}
       <div aria-live="polite" aria-busy={loading}>
         {loading && <p role="status">PDFs werden eingelesen …</p>}
         {error && <p className="bad" role="alert">{error}</p>}
@@ -64,6 +68,10 @@ function Overview() {
                   <li key={lecture.id}>
                     <span className="lecture-title">{lecture.pageCount !== null ? <a href={`#vorlesung/${lecture.id}`}>{lecture.title}</a> : lecture.title}</span>
                     {lecture.pageCount !== null && <span className="page-count">{lecture.pageCount} {lecture.pageCount === 1 ? 'Seite' : 'Seiten'}</span>}
+                    {lecture.progress && <span className="lecture-progress">
+                      {lecture.progress.completed ? '✓ erledigt' : lecture.progress.maxPageVisited > 0 ? `bis Folie ${lecture.progress.maxPageVisited}/${lecture.pageCount ?? '?'}` : 'Noch nicht begonnen'}
+                      {' · '}{lecture.progress.noteCount === null ? 'Notizdatei prüfen' : `${lecture.progress.noteCount} ${lecture.progress.noteCount === 1 ? 'Notiz' : 'Notizen'}`}
+                    </span>}
                     {lecture.error && <span className="bad">{lecture.error}</span>}
                   </li>
                 ))}

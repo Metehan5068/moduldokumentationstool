@@ -74,8 +74,9 @@ Spaltenverhältnis wird lokal im Browser gespeichert.
 - `Strg+G` oder der Folienzähler: zu einer Foliennummer springen.
 - `Strg+S`: ausstehende Notizen sofort speichern.
 
-Nach dem Laden liegt der Fokus im Notizfeld der ersten Folie; die Kürzel sind
-sofort nutzbar. Resume und Fortschritt folgen in Phase 4.
+Nach dem Laden liegt der Fokus im zuletzt aktiven Notizfeld mit der gespeicherten
+Cursorauswahl. Bei einer erstmals geöffneten Vorlesung ist das Folie 1;
+die Kürzel sind sofort nutzbar.
 
 Der PDF-Endpunkt `/api/lectures/:id/pdf` unterstützt HTTP-Range-Requests. PDF.js,
 Worker, Schriften und Decoder werden lokal gebündelt. Nur sichtbare Folien plus
@@ -126,3 +127,34 @@ CRLF und Umlauten sowie 20 parallele PUTs, externe Änderungen an derselben und
 anderen Seiten und simulierte Windows-Schreibfehler. Die Browsertests prüfen
 zusätzlich Autosave über Reload, Konfliktentscheidungen, Fehlerwiederholung,
 Reparatur und die sofort nutzbaren Tastaturkürzel.
+
+## Resume und Fortschritt (Phase 4)
+
+Die App speichert `state.json` neben `notes.md`: sichtbare Folie und relativen
+Versatz in der gemeinsamen Folienzeile, zuletzt aktives Notizfeld, Cursor bzw.
+Textauswahl und höchste besuchte Seite (`maxPageVisited`). Beim Öffnen entsteht
+zuerst das vollständige Seitenlayout; danach wird gescrollt und das gespeicherte
+Notizfeld mit `preventScroll` fokussiert. Auch bei geänderter Fensterbreite bleibt
+der relative Versatz erhalten. Cursorpositionen werden auf den vorhandenen Text
+begrenzt, Seiten auf den gültigen PDF-Bereich.
+
+Beim Scrollen, Fokussieren und Ändern der Auswahl wird höchstens alle 1,5 Sekunden
+geschrieben, mit Nachlauf für den letzten Stand. `pagehide` und Ausblenden der
+Seite lösen sofort einen Keepalive-Request aus; der Wechsel zur Übersicht wartet
+auf den letzten Stand. State-Dateien werden atomar mit derselben Schreib-Queue
+wie Notizen und Metadaten geschrieben. Zeitstempel verhindern, dass verspätete
+Requests neuere Positionen überschreiben. Fehler erscheinen separat von
+Notiz-Speicherfehlern und können erneut versucht werden.
+
+Der Haken „erledigt“ speichert eine manuelle Markierung in `meta.json`. Er setzt
+keine besuchte Seite voraus und bleibt bei erneutem Scan erhalten. Ein Fehler
+setzt den Haken zurück und zeigt eine Meldung. Die Startseite zeigt die höchste
+besuchte Folie getrennt von der Zahl nicht-leerer Notizen sowie unter „Weiter mit“
+die zuletzt geöffnete oder bearbeitete Vorlesung. Zurückscrollen verringert den
+Fortschritt nicht.
+
+Die Phase-4-Browser-Abnahme schließt den Tab bei Folie 13 mit halbem Seitenversatz
+und Cursorposition 84, beendet den echten Node-Serverprozess, startet ihn mit
+demselben Datenordner neu und öffnet die Vorlesung über „Weiter mit“. Zusätzlich
+werden unabhängige Scroll- und Fokuspositionen, andere Fensterbreiten, der
+Scroll-Throttle und Fehler beim Erledigt-Speichern geprüft.

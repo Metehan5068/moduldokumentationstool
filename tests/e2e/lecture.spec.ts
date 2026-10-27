@@ -11,7 +11,9 @@ import { newNotes, parseNotes, serializeNotes } from '../../src/shared/notes';
 let root: string;
 let app: FastifyInstance;
 let baseURL: string;
-const id = lectureId('module/ids/132 Folien, Test.pdf');
+let id: string;
+let lectureTitle: string;
+let fixtureCount = 0;
 
 test.beforeAll(async () => {
   // Selbst erzeugte PDFs ausschließlich im ignorierten Fixture-Unterordner.
@@ -19,9 +21,14 @@ test.beforeAll(async () => {
   await mkdir(fixtures, { recursive: true });
   root = await mkdtemp(join(fixtures, 'phase2-'));
   await mkdir(join(root, 'module', 'ids'), { recursive: true });
-  await writeFile(join(root, 'module', 'ids', '132 Folien, Test.pdf'), lecturePdf(132));
   app = await buildApp(loadConfig({ DATA_ROOT: root }));
   baseURL = await app.listen({ host: '127.0.0.1', port: 0 });
+});
+test.beforeEach(async () => {
+  // Jede Abnahme startet mit einer eigenen Vorlesung und unabhängiger Leseposition.
+  lectureTitle = `132 Folien, Test ${++fixtureCount}`;
+  id = lectureId(`module/ids/${lectureTitle}.pdf`);
+  await writeFile(join(root, 'module', 'ids', `${lectureTitle}.pdf`), lecturePdf(132));
 });
 test.afterAll(async () => {
   await app?.close();
@@ -30,9 +37,9 @@ test.afterAll(async () => {
 });
 async function openLecture(page: Page) {
   await page.goto(baseURL);
-  await page.getByRole('link', { name: '132 Folien, Test' }).click();
+  await page.getByRole('link', { name: lectureTitle, exact: true }).click();
   await expect(page.locator('.slide-row')).toHaveCount(132);
-  await expect(page.locator('canvas[data-rendered=true]').first()).toBeVisible();
+  await expect(page.locator('canvas[data-rendered=true]:visible').first()).toBeVisible();
 }
 async function jump(page: Page, number: number) {
   await page.keyboard.press('Control+g');
