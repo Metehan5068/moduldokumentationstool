@@ -11,3 +11,6 @@ ENTWICKLUNGSPLAN.md
 .env
 node_modules/
 dist/
+coverage/
+test-results/
+playwright-report/
