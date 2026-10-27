@@ -6,6 +6,7 @@ import type { Registry } from './registry.js';
 import { containedPath, safePath, writeAtomic } from './files.js';
 import { newNotes, normalizeNote, NotesParseError, parseNotes, serializeNotes, type NotesDocument } from '../shared/notes.js';
 import type { NoteValue } from '../shared/api.js';
+import { WriteQueue } from './write-queue.js';
 
 type Lecture = NonNullable<ReturnType<Registry['get']>>;
 export const noteHash = (text: string): string => createHash('sha256').update(normalizeNote(text)).digest('hex');
@@ -14,8 +15,7 @@ export class NoteConflictError extends Error {
 }
 
 export class NotesStore {
-  private queues = new Map<string, Promise<unknown>>();
-  constructor(private readonly config: AppConfig) {}
+  constructor(private readonly config: AppConfig, private readonly writes = new WriteQueue()) {}
 
   private async path(lecture: Lecture): Promise<string> {
     const path = containedPath(this.config.notesRoot, lecture.module, lecture.summary.title, 'notes.md');
@@ -37,7 +37,7 @@ export class NotesStore {
   }
   write(lecture: Lecture, page: number, text: string, baseHash: string): Promise<NoteValue> {
     const id = lecture.summary.id;
-    const result = (this.queues.get(id) ?? Promise.resolve()).then(async () => {
+    return this.writes.run(id, async () => {
       const document = await this.readDocument(lecture); // Innerhalb der Queue immer frisch lesen.
       const current = document.notes[page] ?? '';
       if (noteHash(current) !== baseHash) throw new NoteConflictError(current);
@@ -47,10 +47,6 @@ export class NotesStore {
       await writeAtomic(this.config.notesRoot, await this.path(lecture), serializeNotes(document));
       return { text: normalized, hash: noteHash(normalized) };
     });
-    const settled = result.catch(() => undefined);
-    this.queues.set(id, settled);
-    void settled.then(() => { if (this.queues.get(id) === settled) this.queues.delete(id); });
-    return result;
   }
 }
 export { NotesParseError };

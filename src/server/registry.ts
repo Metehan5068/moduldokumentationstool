@@ -5,12 +5,13 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { OverviewResponse, LectureSummary } from '../shared/api.js';
 import type { AppConfig } from './config.js';
 import { containedPath, safePath, writeJson } from './files.js';
+import { WriteQueue } from './write-queue.js';
 
 const collator = new Intl.Collator('de', { numeric: true });
 export const naturalCompare = (a: string, b: string): number => collator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
 export const lectureId = (path: string): string => createHash('sha256').update(path.replaceAll('\\', '/').normalize('NFC')).digest('hex').slice(0, 16);
 
-interface Metadata {
+export interface Metadata {
   schemaVersion: 1;
   module: string;
   lecture: string;
@@ -33,10 +34,10 @@ async function entries(path: string): Promise<Dirent[]> {
   }
 }
 
-async function cachedMeta(path: string): Promise<Metadata | undefined> {
+export async function cachedMeta(path: string): Promise<Metadata | undefined> {
   try {
     const meta = JSON.parse(await readFile(path, 'utf8')) as Metadata;
-    if (meta.schemaVersion === 1 && /^[a-f0-9]{64}$/.test(meta.sourceSha256)
+    if (meta && meta.schemaVersion === 1 && /^[a-f0-9]{64}$/.test(meta.sourceSha256)
       && typeof meta.acceptedSha256 === 'string' && typeof meta.completed === 'boolean'
       && Number.isInteger(meta.pageCount) && meta.pageCount > 0) return meta;
   } catch (error) {
@@ -48,7 +49,7 @@ export class Registry {
   private queue: Promise<unknown> = Promise.resolve();
   private lectures = new Map<string, { pdfPath: string; module: string; summary: LectureSummary }>();
 
-  constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error'>) {}
+  constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error'>, private readonly writes = new WriteQueue()) {}
 
   get(id: string) { return this.lectures.get(id); }
 
@@ -102,7 +103,13 @@ export class Registry {
               sourceSize: info.size, sourceMtimeMs: info.mtimeMs,
             };
             try {
-              await writeJson(this.config.notesRoot, metaPath, meta);
+              await this.writes.run(summary.id, async () => {
+                const current = await cachedMeta(metaPath);
+                await writeJson(this.config.notesRoot, metaPath, {
+                  ...meta, completed: current?.completed ?? meta.completed,
+                  acceptedSha256: current?.acceptedSha256 ?? meta.acceptedSha256,
+                });
+              });
             } catch (err) {
               this.logger.error({ err, lectureId: summary.id, sourcePdf }, 'Metadaten konnten nicht gespeichert werden');
               summary.error = 'Metadaten konnten nicht gespeichert werden. Zugriffsrechte prüfen.';
