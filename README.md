@@ -5,7 +5,7 @@ Alle Daten bleiben lokal und liegen als Markdown/JSON vor, damit sie auch ohne d
 
 ## Voraussetzungen
 
-- Node.js ≥ 22.12 (`node -v`)
+- Node.js ≥ 22.13 (`node -v`, benötigt von PDF.js)
 - Ein Datenordner **außerhalb dieses Repos**, z. B.:
 
 ```text
@@ -41,3 +41,20 @@ npm install
 ## Datenschutz
 
 PDFs und Notizen gehören nicht in dieses Repo. `.gitignore` schließt `module/`, `notes/` und `*.pdf` zusätzlich aus.
+
+## Modulübersicht (Phase 1)
+
+Die Startseite liest direkte Unterordner von `module/` als Module ein und zeigt deren
+PDFs in natürlicher Reihenfolge (z. B. IDS-2 vor IDS-10). Leerzeichen, Kommas,
+Umlaute und die Endung `.PDF` werden unterstützt. Unterordner innerhalb eines
+Moduls werden nicht durchsucht. „Neu einlesen“ findet hinzugefügte, ersetzte und
+entfernte PDFs ohne Server-Neustart.
+
+Unter `notes/<Modul>/<PDF-Dateiname ohne Endung>/meta.json` speichert die App
+SHA-256, Seitenzahl sowie Dateigröße und Änderungszeit als Cache. Unveränderte PDFs
+werden auch nach einem Neustart nicht erneut gehasht oder geparst. Vorhandene
+Notizen bleiben erhalten. Nicht lesbare PDFs erscheinen mit einem Fehlerhinweis.
+
+`GET /api/overview` und `POST /api/rescan` liefern die aktualisierte Übersicht;
+Vorlesungen werden über stabile IDs identifiziert. Die Vorlesungsansicht folgt
+in Phase 2, Notizen und Fortschritt in den nachfolgenden Phasen.

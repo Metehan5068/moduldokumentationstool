@@ -5,7 +5,7 @@
   "description": "Lokale Web-App für Notizen zu Vorlesungsfolien (PDF) – Folie links, Notiz rechts.",
   "type": "module",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,magenta \"tsx watch src/server/index.ts\" \"vite\"",
@@ -17,6 +17,7 @@
   "dependencies": {
     "@fastify/static": "^10.1.8",
     "fastify": "^5.12.7",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

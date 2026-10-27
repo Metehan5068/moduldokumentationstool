@@ -33,3 +33,17 @@ h1 { font-size: 1.6rem; margin-bottom: 1.5rem; }
 .good { color: var(--good); }
 .bad { color: var(--bad); }
 .hint { color: var(--muted); font-size: 0.9rem; margin-top: 2rem; }
+.overview-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 28px; flex-wrap: wrap; }
+.overview-header h1 { margin: 0 0 8px; }
+.subtitle, .empty, .page-count { color: var(--muted); }
+.subtitle { margin: 0; }
+button { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 16px; cursor: pointer; }
+button:disabled { opacity: 0.6; cursor: wait; }
+button:focus-visible { outline: 2px solid var(--good); outline-offset: 3px; }
+.module { margin: 24px 0; }
+.module h2 { font-size: 1.2rem; }
+.lectures { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
+.lectures li { padding: 16px 20px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px 24px; flex-wrap: wrap; }
+.lectures li + li { border-top: 1px solid var(--border); }
+.lecture-title { overflow-wrap: anywhere; min-width: 0; flex: 1 1 320px; }
+.page-count { white-space: nowrap; }

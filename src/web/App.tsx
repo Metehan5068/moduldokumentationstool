@@ -1,45 +1,56 @@
 import { useEffect, useState } from 'react';
-import type { HealthResponse } from '../shared/api';
-
-type Status =
-  | { kind: 'loading' }
-  | { kind: 'ok'; health: HealthResponse }
-  | { kind: 'error'; message: string };
+import type { OverviewResponse } from '../shared/api';
 
 export function App() {
-  const [status, setStatus] = useState<Status>({ kind: 'loading' });
+  const [overview, setOverview] = useState<OverviewResponse>();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
 
-  useEffect(() => {
-    fetch('/api/health')
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setStatus({ kind: 'ok', health: (await res.json()) as HealthResponse });
-      })
-      .catch((err: unknown) => setStatus({ kind: 'error', message: String(err) }));
-  }, []);
+  async function load(rescan = false) {
+    setLoading(true);
+    setError(undefined);
+    try {
+      const response = await fetch(rescan ? '/api/rescan' : '/api/overview', rescan ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' } : undefined);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setOverview(await response.json() as OverviewResponse);
+    } catch {
+      setError('Die Übersicht konnte nicht geladen werden. Bitte Datenordner und Server prüfen und erneut einlesen.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void load(); }, []);
 
   return (
     <main className="shell">
-      <h1>Moduldokumentation</h1>
-      {status.kind === 'loading' && <p>Verbinde mit Server …</p>}
-      {status.kind === 'error' && <p className="bad">Server nicht erreichbar: {status.message}</p>}
-      {status.kind === 'ok' && (
-        <dl className="facts">
-          <dt>Server</dt>
-          <dd className="good">läuft</dd>
-          <dt>Datenordner</dt>
-          <dd><code>{status.health.dataRoot}</code></dd>
-          <dt>module/</dt>
-          <dd className={status.health.moduleDirExists ? 'good' : 'bad'}>
-            {status.health.moduleDirExists ? 'gefunden' : 'fehlt – DATA_ROOT in .env prüfen'}
-          </dd>
-          <dt>notes/</dt>
-          <dd className={status.health.notesDirExists ? 'good' : 'bad'}>
-            {status.health.notesDirExists ? 'gefunden' : 'fehlt'}
-          </dd>
-        </dl>
-      )}
-      <p className="hint">Phase 0 – Gerüst. Modulübersicht folgt in Phase 1.</p>
+      <header className="overview-header">
+        <div><h1>Moduldokumentation</h1><p className="subtitle">Deine Module und Vorlesungsfolien</p></div>
+        <button type="button" disabled={loading} onClick={() => void load(true)}>
+          {loading ? 'Liest ein …' : 'Neu einlesen'}
+        </button>
+      </header>
+      <div aria-live="polite" aria-busy={loading}>
+        {loading && <p role="status">PDFs werden eingelesen …</p>}
+        {error && <p className="bad" role="alert">{error}</p>}
+        {overview && overview.modules.length === 0 && <p className="empty">Noch keine Module gefunden. Lege einen Modulordner mit PDFs unter module/ im Datenordner an und wähle „Neu einlesen“.</p>}
+        {overview?.modules.map((module) => (
+          <section className="module" key={module.name} aria-label={`Modul ${module.name}`}>
+            <h2>{module.name}</h2>
+            {module.lectures.length === 0 ? <p className="empty">Keine PDF-Dateien in diesem Modul.</p> : (
+              <ul className="lectures">
+                {module.lectures.map((lecture) => (
+                  <li key={lecture.id}>
+                    <span className="lecture-title">{lecture.title}</span>
+                    {lecture.error ? <span className="bad">{lecture.error}</span> : <span className="page-count">{lecture.pageCount} {lecture.pageCount === 1 ? 'Seite' : 'Seiten'}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))}
+      </div>
+      <p className="hint">Neue PDFs im Datenordner? Mit „Neu einlesen“ aktualisierst du die Übersicht.</p>
     </main>
   );
 }

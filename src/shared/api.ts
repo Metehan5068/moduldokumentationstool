@@ -6,3 +6,14 @@ export interface HealthResponse {
   moduleDirExists: boolean;
   notesDirExists: boolean;
 }
+
+export interface LectureSummary {
+  id: string;
+  title: string;
+  pageCount: number | null;
+  error?: string;
+}
+
+export interface OverviewResponse {
+  modules: { name: string; lectures: LectureSummary[] }[];
+}
