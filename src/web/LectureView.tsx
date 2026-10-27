@@ -102,6 +102,10 @@ export function LectureView({ id }: { id: string }) {
   }, [jumpOpen]);
 
   useEffect(() => {
+    if (loaded) notes.current[0]?.focus({ preventScroll: true });
+  }, [loaded]);
+
+  useEffect(() => {
     if (!hasDrafts) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
     window.addEventListener('beforeunload', warn);

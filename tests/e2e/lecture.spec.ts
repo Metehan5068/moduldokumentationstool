@@ -41,6 +41,22 @@ async function jump(page: Page, number: number) {
   await expect(page.locator(`[data-page="${number}"] canvas[data-rendered=true]`)).toBeVisible();
 }
 
+test('Kürzel funktionieren direkt nach dem Öffnen ohne vorherigen Klick', async ({ page }) => {
+  await openLecture(page);
+  await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
+  await page.keyboard.press('Alt+ArrowDown');
+  await expect(page.getByLabel('Notiz zu Folie 2', { exact: true })).toBeFocused();
+  await page.keyboard.press('Alt+ArrowUp');
+  await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
+  await page.reload();
+  await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
+  await page.keyboard.press('Control+g');
+  await expect(page.getByLabel('Gehe zu Folie')).toBeFocused();
+  await page.getByLabel('Gehe zu Folie').fill('3');
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Notiz zu Folie 3', { exact: true })).toBeFocused();
+});
+
 test('132 Folien: Zeilenzuordnung, Tastatur, Trenner und dauerhafte Textareas', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
