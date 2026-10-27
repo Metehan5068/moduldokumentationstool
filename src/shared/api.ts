@@ -20,4 +20,10 @@ export interface OverviewResponse {
 
 export interface LectureResponse extends LectureSummary {
   module: string;
+  notes: Record<number, NoteValue>;
+  readOnlyError?: NotesFileError;
 }
+
+export interface NoteValue { text: string; hash: string }
+export interface NotesFileError { message: string; line?: number }
+export interface NoteConflict { currentText: string; currentHash: string }

@@ -29,13 +29,17 @@ export async function safePath(root: string, target: string): Promise<void> {
 }
 
 export async function writeJson(root: string, target: string, value: unknown): Promise<void> {
+  return writeAtomic(root, target, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+export async function writeAtomic(root: string, target: string, text: string): Promise<void> {
   await safePath(root, target);
   await mkdir(dirname(target), { recursive: true });
   const temporary = `${target}.${randomUUID()}.tmp`;
   try {
     const file = await open(temporary, 'wx');
     try {
-      await file.writeFile(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
+      await file.writeFile(text, 'utf8');
       await file.sync();
     } finally {
       await file.close();

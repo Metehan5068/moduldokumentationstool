@@ -1,16 +1,25 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { OverviewResponse } from '../shared/api';
 const LectureView = lazy(() => import('./LectureView').then((module) => ({ default: module.LectureView })));
 
 export function App() {
   const [hash, setHash] = useState(window.location.hash);
+  const currentHash = useRef(hash);
+  const guard = useRef<(() => Promise<boolean>) | undefined>(undefined);
+  const registerGuard = useCallback((check: (() => Promise<boolean>) | undefined) => { guard.current = check; }, []);
   useEffect(() => {
-    const update = () => setHash(window.location.hash);
+    const update = async () => {
+      const next = window.location.hash;
+      const allowed = await guard.current?.() ?? true;
+      if (window.location.hash !== next) return;
+      if (allowed) { currentHash.current = next; setHash(next); }
+      else window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${currentHash.current}`);
+    };
     window.addEventListener('hashchange', update);
     return () => window.removeEventListener('hashchange', update);
   }, []);
   const id = /^#vorlesung\/([a-f0-9]{16})$/.exec(hash)?.[1];
-  return id ? <Suspense fallback={<p role="status">Vorlesungsansicht wird geladen …</p>}><LectureView key={id} id={id} /></Suspense> : <Overview />;
+  return id ? <Suspense fallback={<p role="status">Vorlesungsansicht wird geladen …</p>}><LectureView key={id} id={id} registerGuard={registerGuard} /></Suspense> : <Overview />;
 }
 
 function Overview() {

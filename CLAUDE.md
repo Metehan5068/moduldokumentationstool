@@ -8,7 +8,7 @@ Die vollständige Spezifikation steht in `ENTWICKLUNGSPLAN.md` im Repo-Root. Die
 (nicht auf GitHub) und taucht deshalb evtl. nicht in Suchergebnissen auf – **direkt per Pfad lesen**. Vor jeder Phase den passenden Abschnitt lesen
 und am Ende die Abnahmekriterien der Phase prüfen.
 
-Stand: **Phase 2 (Vorlesungsansicht) erledigt.** Nächste: Phase 3 (Notizen und Autosave).
+Stand: **Phase 3 (Notizen und Autosave) erledigt.** Nächste: Phase 4 (Resume und Fortschritt).
 
 ## Struktur
 

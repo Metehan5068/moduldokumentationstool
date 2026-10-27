@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { LectureResponse } from '../shared/api';
 import { PdfCanvas } from './PdfCanvas';
+import { NotesSession, statusText } from './notes-session';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 const SPLIT_KEY = 'lecture-column-ratio';
@@ -15,7 +16,7 @@ function storedSplit() {
 }
 interface LoadedLecture { detail: LectureResponse; pdf: PDFDocumentProxy; ratios: number[] }
 
-export function LectureView({ id }: { id: string }) {
+export function LectureView({ id, registerGuard }: { id: string; registerGuard: (check: (() => Promise<boolean>) | undefined) => void }) {
   const [loaded, setLoaded] = useState<LoadedLecture>();
   const [error, setError] = useState<string>();
   const [split, setSplit] = useState(storedSplit);
@@ -24,13 +25,32 @@ export function LectureView({ id }: { id: string }) {
   const [jumpOpen, setJumpOpen] = useState(false);
   const [jumpValue, setJumpValue] = useState('1');
   const [jumpError, setJumpError] = useState(false);
-  const [hasDrafts, setHasDrafts] = useState(false);
+  const [, redraw] = useReducer((value: number) => value + 1, 0);
+  const session = useMemo(() => loaded ? new NotesSession(id, loaded.detail.notes, loaded.detail.readOnlyError) : undefined, [loaded, id]);
   const scroll = useRef<HTMLDivElement>(null);
   const rows = useRef<(HTMLElement | null)[]>([]);
   const notes = useRef<(HTMLTextAreaElement | null)[]>([]);
   const jumpInput = useRef<HTMLInputElement>(null);
   const activePage = useRef(1);
   const drag = useRef(false);
+
+  useEffect(() => {
+    if (!session) return;
+    const unsubscribe = session.subscribe(redraw);
+    const flush = () => { void session.flushAll(true); };
+    const visibility = () => { if (document.visibilityState === 'hidden') flush(); else session.resume(); };
+    const beforeUnload = (event: BeforeUnloadEvent) => { if (session.hasUnsaved()) event.preventDefault(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('beforeunload', beforeUnload);
+    registerGuard(async () => { await session.flushAll(); return !session.hasUnsaved(); });
+    return () => {
+      unsubscribe(); registerGuard(undefined); session.dispose();
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('beforeunload', beforeUnload);
+    };
+  }, [session, registerGuard]);
 
   useEffect(() => {
     let disposed = false;
@@ -105,15 +125,9 @@ export function LectureView({ id }: { id: string }) {
     if (loaded) notes.current[0]?.focus({ preventScroll: true });
   }, [loaded]);
 
-  useEffect(() => {
-    if (!hasDrafts) return;
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [hasDrafts]);
-
   const goTo = (page: number) => {
     if (!loaded) return;
+    void session?.save(activePage.current);
     const target = Math.max(1, Math.min(loaded.pdf.numPages, page));
     activePage.current = target;
     rows.current[target - 1]?.scrollIntoView({ block: 'start' });
@@ -126,6 +140,8 @@ export function LectureView({ id }: { id: string }) {
       event.preventDefault(); goTo(activePage.current + (event.key === 'ArrowDown' ? 1 : -1));
     } else if (event.ctrlKey && event.key.toLowerCase() === 'g') {
       event.preventDefault(); openJump();
+    } else if (event.ctrlKey && event.key.toLowerCase() === 's') {
+      event.preventDefault(); void session?.flushAll();
     } else if (event.key === 'Escape') {
       if (jumpOpen) { setJumpOpen(false); scroll.current?.focus(); }
       else { (event.target as HTMLElement).blur(); scroll.current?.focus({ preventScroll: true }); }
@@ -137,11 +153,23 @@ export function LectureView({ id }: { id: string }) {
   return (
     <main className="lecture-view" onKeyDown={onKeyDown}>
       <header className="lecture-toolbar">
-        <a href="#" onClick={(event) => { if (hasDrafts && !window.confirm('Die Notizen sind nur in dieser Ansicht vorhanden. Ansicht trotzdem verlassen?')) event.preventDefault(); }}>← Übersicht</a>
+        <a href="#">← Übersicht</a>
         <h1>{loaded ? `${loaded.detail.module} · ${loaded.detail.title}` : 'Vorlesung'}</h1>
         {loaded && <button type="button" onClick={openJump}>Folie {currentPage} / {loaded.pdf.numPages}</button>}
+        {session && <span role="status">{session.readOnlyError ? 'Schreibgeschützt' : statusText[session.summary()]}</span>}
       </header>
-      <p className="draft-warning" role="status">Notizen sind vorläufig und werden noch nicht gespeichert. Alt+↑/↓: Folie wechseln · Strg+G: Gehe zu Folie · Esc: Notizfeld verlassen</p>
+      <p className="draft-warning">Alt+↑/↓: Folie wechseln · Strg+G: Gehe zu Folie · Strg+S: sofort speichern · Esc: Notizfeld verlassen</p>
+      {session?.readOnlyError && <div className="notes-error" role="alert">
+        <p>Notizdatei ist schreibgeschützt: {session.readOnlyError.message} Bitte die Datei reparieren und erneut prüfen.</p>
+        <button type="button" onClick={async () => {
+          try {
+            const response = await fetch(`/api/lectures/${id}`);
+            if (!response.ok) throw new Error();
+            const detail = await response.json() as LectureResponse;
+            session.refresh(detail.notes, detail.readOnlyError);
+          } catch { setError('Die Notizdatei konnte nicht erneut geprüft werden.'); }
+        }}>Datei erneut prüfen</button>
+      </div>}
       {error && <p className="bad" role="alert">{error}</p>}
       {!loaded && !error && <p role="status">PDF und Seitenlayout werden geladen …</p>}
       {jumpOpen && loaded && (
@@ -183,10 +211,29 @@ export function LectureView({ id }: { id: string }) {
               </figure>
               <div className="note-card">
                 <label htmlFor={`note-${pageNumber}`}>Notiz zu Folie {pageNumber}</label>
-                <textarea id={`note-${pageNumber}`} ref={(element) => { notes.current[index] = element; }} onFocus={() => { activePage.current = pageNumber; setCurrentPage(pageNumber); }} onChange={() => setHasDrafts(notes.current.some((note) => Boolean(note?.value)))} placeholder="Deine Notiz …" />
+                <textarea id={`note-${pageNumber}`} ref={(element) => { notes.current[index] = element; }} onFocus={() => { activePage.current = pageNumber; setCurrentPage(pageNumber); }}
+                  value={session?.get(pageNumber).text ?? ''} readOnly={Boolean(session?.readOnlyError)}
+                  onChange={(event) => session?.edit(pageNumber, event.target.value)} onBlur={() => { void session?.save(pageNumber); }} placeholder="Deine Notiz …" />
+                {session && <div className="note-save-status">
+                  <span>{statusText[session.get(pageNumber).status]}</span>
+                  {session.get(pageNumber).status === 'error' && !session.readOnlyError && <button type="button" onClick={() => { void session.save(pageNumber); }}>Wiederholen</button>}
+                </div>}
+                {session?.get(pageNumber).conflict && <div className="conflict-panel" role="group" aria-label={`Konflikt Folie ${pageNumber}`}>
+                  <p>Diese Notiz wurde in der Datei geändert. Deine Fassung steht im Notizfeld oben.</p>
+                  <label htmlFor={`file-note-${pageNumber}`}>Dateifassung Folie {pageNumber}</label>
+                  <textarea id={`file-note-${pageNumber}`} readOnly value={session.get(pageNumber).conflict!.currentText} />
+                  <div className="conflict-actions">
+                    <button type="button" onClick={() => session.resolve(pageNumber, 'mine')}>Eigene behalten</button>
+                    <button type="button" onClick={() => session.resolve(pageNumber, 'file')}>Datei übernehmen</button>
+                    <button type="button" onClick={() => session.resolve(pageNumber, 'merge')}>Beide zusammenfügen</button>
+                  </div>
+                </div>}
               </div>
             </section>;
           })}
+          {session && [...session.drafts].filter(([page]) => page > loaded.pdf.numPages).map(([page, draft]) => <section className="orphan-note" key={`orphan-${page}`}>
+            <h2>Notizen ohne Folie · Folie {page}</h2><textarea aria-label={`Notiz ohne Folie ${page}`} readOnly value={draft.text} />
+          </section>)}
         </div>}
       </div>
     </main>

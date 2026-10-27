@@ -72,10 +72,10 @@ Spaltenverhältnis wird lokal im Browser gespeichert.
 - `Alt+↓` / `Alt+↑`: nächste/vorherige Folie mit Fokus im Notizfeld.
 - `Esc`: Notizfeld verlassen; Pfeiltasten scrollen wieder die Ansicht.
 - `Strg+G` oder der Folienzähler: zu einer Foliennummer springen.
+- `Strg+S`: ausstehende Notizen sofort speichern.
 
-**Notizen sind in Phase 2 nur vorläufige Entwürfe in der geöffneten Ansicht.**
-Sie überleben Scrollen und Spaltenänderungen, werden aber noch nicht gespeichert.
-Autosave einschließlich `Strg+S` folgt in Phase 3, Resume und Fortschritt in Phase 4.
+Nach dem Laden liegt der Fokus im Notizfeld der ersten Folie; die Kürzel sind
+sofort nutzbar. Resume und Fortschritt folgen in Phase 4.
 
 Der PDF-Endpunkt `/api/lectures/:id/pdf` unterstützt HTTP-Range-Requests. PDF.js,
 Worker, Schriften und Decoder werden lokal gebündelt. Nur sichtbare Folien plus
@@ -89,3 +89,40 @@ und wechselnden Seitenverhältnissen in `tests/fixtures/.generated/`, prüfen
 Zuordnung, Navigation, Trenner, HiDPI, Resize und zweimaliges Durchscrollen
 aller Seiten mit begrenzter Canvas-Anzahl und Speicherprüfung. Testdaten und
 Ergebnisse werden nicht committed; echte Vorlesungs-PDFs werden nicht verwendet.
+
+## Notizen und Autosave (Phase 3)
+
+Notizen sind reiner Text. Sie werden 600 ms nach der letzten Eingabe sowie sofort
+beim Verlassen des Notizfelds, bei Tastaturnavigation und mit `Strg+S` gespeichert.
+Der Status zeigt „Ungespeichert“, „Speichert …“, „Gespeichert“ oder einen Fehler.
+Bei Fehlern bleibt der Text im Browser; „Wiederholen“ oder ein automatischer
+Versuch nach fünf Sekunden stößt das Speichern erneut an. Beim Ausblenden oder
+Verlassen der Seite werden ausstehende Notizen per Keepalive-Request geflusht.
+Ungespeicherte Änderungen lösen eine Warnung beim Schließen aus; ein Wechsel zur
+Übersicht wartet auf die Speicherung und bleibt bei Fehlern oder Konflikten in
+der Vorlesung.
+
+Die Datei `notes/<Modul>/<Vorlesung>/notes.md` ist die Quelle der Notizen. Sie
+enthält nur nicht-leere Notizblöcke, numerisch nach Seite sortiert. Marker stehen
+jeweils auf einer eigenen Zeile. Marker im Nutzertext werden mit einem zusätzlichen
+Backslash geschützt; Zeilenenden werden zu LF normalisiert. Generierte
+Folienüberschriften bestimmen nicht die Zuordnung; maßgeblich ist der Marker.
+
+Externe Bearbeitung ist möglich: Der Server liest die Datei bei jedem Schreiben
+innerhalb einer Queue pro Vorlesung frisch ein und verändert nur die gewählte
+Seite. Ein Hash des zuvor geladenen Seitentexts erkennt Konflikte auf derselben
+Seite (`409`). Die Oberfläche zeigt beide Fassungen und bietet „Eigene behalten“,
+„Datei übernehmen“ und „Beide zusammenfügen“. Änderungen an anderen Seiten bleiben
+erhalten. Bei kaputten Markern erscheint eine Fehlermeldung mit Zeilennummer;
+die Vorlesung bleibt bis zur Reparatur und „Datei erneut prüfen“ schreibgeschützt.
+Bereits eingegebener Text bleibt dabei sichtbar und kopierbar.
+
+Schreibvorgänge verwenden eine zufällige temporäre Datei im selben Verzeichnis,
+`fsync` und anschließend `rename`. Bei Windows-Fehlern `EPERM`/`EBUSY` gibt es
+höchstens fünf Versuche mit kurzem Backoff. PDFs werden ausschließlich gelesen.
+
+`npm test` prüft die Roundtrips einschließlich Marker-Escaping, Leerzeilen,
+CRLF und Umlauten sowie 20 parallele PUTs, externe Änderungen an derselben und
+anderen Seiten und simulierte Windows-Schreibfehler. Die Browsertests prüfen
+zusätzlich Autosave über Reload, Konfliktentscheidungen, Fehlerwiederholung,
+Reparatur und die sofort nutzbaren Tastaturkürzel.

@@ -69,3 +69,13 @@ a { color: inherit; text-underline-offset: 3px; }
 .column-splitter:hover, .column-splitter:focus-visible { background: var(--border); outline: 2px solid var(--good); }
 .jump-form { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
 .jump-form input { font: inherit; width: 100px; padding: 8px; }
+.note-save-status { display: flex; align-items: center; gap: 12px; margin-top: 8px; color: var(--muted); font-size: 0.85rem; }
+.note-save-status button, .conflict-actions button { padding: 6px 10px; }
+.conflict-panel { padding: 12px; margin-top: 12px; border: 1px solid var(--bad); border-radius: 6px; }
+.conflict-panel p { margin: 0 0 10px; }
+.conflict-panel textarea { flex: none; height: 110px; }
+.conflict-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.notes-error { padding: 12px 20px; border-bottom: 1px solid var(--bad); }
+.notes-error p { margin: 0 0 8px; }
+.orphan-note { padding: 16px; }
+.orphan-note textarea { width: 100%; min-height: 120px; font: inherit; }
