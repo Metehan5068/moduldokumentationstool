@@ -15,7 +15,7 @@ if (!existsSync(config.webRoot)) {
   console.warn('⚠ dist/web fehlt – Oberfläche erst nach "npm run build" verfügbar (im Dev-Modus über Vite :5173).');
 }
 
-const app = await buildApp(config);
+const app = await buildApp(config, { logger: true });
 
 try {
   await app.listen({ host: config.host, port: config.port });

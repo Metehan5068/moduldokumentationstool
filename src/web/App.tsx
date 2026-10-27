@@ -42,7 +42,8 @@ export function App() {
                 {module.lectures.map((lecture) => (
                   <li key={lecture.id}>
                     <span className="lecture-title">{lecture.title}</span>
-                    {lecture.error ? <span className="bad">{lecture.error}</span> : <span className="page-count">{lecture.pageCount} {lecture.pageCount === 1 ? 'Seite' : 'Seiten'}</span>}
+                    {lecture.pageCount !== null && <span className="page-count">{lecture.pageCount} {lecture.pageCount === 1 ? 'Seite' : 'Seiten'}</span>}
+                    {lecture.error && <span className="bad">{lecture.error}</span>}
                   </li>
                 ))}
               </ul>

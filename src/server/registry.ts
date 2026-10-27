@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
+import type { FastifyBaseLogger } from 'fastify';
 import type { OverviewResponse, LectureSummary } from '../shared/api.js';
 import type { AppConfig } from './config.js';
 import { containedPath, safePath, writeJson } from './files.js';
@@ -47,7 +48,7 @@ export class Registry {
   private queue: Promise<unknown> = Promise.resolve();
   private lectures = new Map<string, { pdfPath: string; summary: LectureSummary }>();
 
-  constructor(private readonly config: AppConfig) {}
+  constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error'>) {}
 
   get(id: string) { return this.lectures.get(id); }
 
@@ -100,11 +101,17 @@ export class Registry {
               pageCount: summary.pageCount, pagesWithoutText: [], completed: previous?.completed ?? false,
               sourceSize: info.size, sourceMtimeMs: info.mtimeMs,
             };
-            await writeJson(this.config.notesRoot, metaPath, meta);
+            try {
+              await writeJson(this.config.notesRoot, metaPath, meta);
+            } catch (err) {
+              this.logger.error({ err, lectureId: summary.id, sourcePdf }, 'Metadaten konnten nicht gespeichert werden');
+              summary.error = 'Metadaten konnten nicht gespeichert werden. Zugriffsrechte prüfen.';
+            }
           }
-        } catch {
+        } catch (err) {
+          this.logger.error({ err, lectureId: summary.id, sourcePdf }, 'PDF konnte nicht eingelesen werden');
           summary.pageCount = null;
-          summary.error = 'PDF konnte nicht eingelesen oder Metadaten konnten nicht gespeichert werden. Datei und Zugriffsrechte prüfen (ggf. passwortgeschützt).';
+          summary.error = 'PDF konnte nicht eingelesen werden. Datei und Zugriffsrechte prüfen (ggf. passwortgeschützt).';
         }
         lectures.push(summary);
         next.set(summary.id, { pdfPath, summary });

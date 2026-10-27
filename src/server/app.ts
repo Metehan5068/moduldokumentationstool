@@ -7,7 +7,7 @@ import { Registry } from './registry.js';
 
 export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: opts.logger ?? false });
-  const registry = new Registry(config);
+  const registry = new Registry(config, app.log);
 
   app.get('/api/overview', () => registry.scan());
   app.post('/api/rescan', () => registry.scan());

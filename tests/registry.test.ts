@@ -2,11 +2,12 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/server/app';
 import { loadConfig } from '../src/server/config';
 import { containedPath } from '../src/server/files';
-import { lectureId, naturalCompare } from '../src/server/registry';
+import { Registry, lectureId, naturalCompare } from '../src/server/registry';
+import * as files from '../src/server/files';
 import type { OverviewResponse } from '../src/shared/api';
 import { testPdf } from './fixtures/pdf';
 
@@ -132,4 +133,28 @@ it('verhindert Metadaten-Schreibzugriffe durch Junctions außerhalb von notes', 
     expect(lecture?.error).toBeDefined();
     await expect(readFile(join(outside, 'meta.json'))).rejects.toMatchObject({ code: 'ENOENT' });
   } finally { await app.close(); }
+});
+
+it('protokolliert Lesefehler mit Ursache und Vorlesung', async () => {
+  const root = await fixture();
+  await writeFile(join(root, 'module', 'ids', 'Defekt.pdf'), 'kein PDF');
+  const logger = { error: vi.fn() };
+  await new Registry(loadConfig({ DATA_ROOT: root }), logger).scan();
+  expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({
+    err: expect.objectContaining({ name: 'InvalidPDFException' }),
+    sourcePdf: 'module/ids/Defekt.pdf', lectureId: expect.any(String),
+  }), 'PDF konnte nicht eingelesen werden');
+});
+
+it('behält die Seitenzahl bei fehlgeschlagenem Metadaten-Schreiben und loggt die Ursache', async () => {
+  const root = await fixture();
+  await writeFile(join(root, 'module', 'ids', 'Gut.pdf'), testPdf(7));
+  const cause = Object.assign(new Error('Schreibschutz'), { code: 'EACCES' });
+  const write = vi.spyOn(files, 'writeJson').mockRejectedValue(cause);
+  const logger = { error: vi.fn() };
+  try {
+    const overview = await new Registry(loadConfig({ DATA_ROOT: root }), logger).scan();
+    expect(overview.modules[0]?.lectures[0]).toMatchObject({ pageCount: 7, error: expect.stringContaining('Metadaten') });
+    expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ err: cause, sourcePdf: 'module/ids/Gut.pdf' }), 'Metadaten konnten nicht gespeichert werden');
+  } finally { write.mockRestore(); }
 });
