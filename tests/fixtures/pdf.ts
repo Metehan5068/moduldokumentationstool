@@ -17,3 +17,29 @@ export function testPdf(pageCount: number): Buffer {
   pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(pdf);
 }
+
+/** Sichtbar nummerierte Folien mit wechselnden Seitenverhältnissen für Browser-Abnahmen. */
+export function lecturePdf(pageCount: number): Buffer {
+  const font = 2 * pageCount + 3;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Count ${pageCount} /Kids [${Array.from({ length: pageCount }, (_, i) => `${i + 3} 0 R`).join(' ')}] >>`,
+    ...Array.from({ length: pageCount }, (_, i) => `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${i % 10 === 9 ? '400 600' : '600 338'}] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${pageCount + i + 3} 0 R >>`),
+    ...Array.from({ length: pageCount }, (_, i) => {
+      const content = `0.85 0.92 0.88 rg 20 20 350 220 re f\n0 0 0 rg BT /F1 32 Tf 40 160 Td (Folie ${i + 1}) Tj ET\n`;
+      return `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}endstream`;
+    }),
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const [i, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf);
+}

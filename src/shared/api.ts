@@ -17,3 +17,7 @@ export interface LectureSummary {
 export interface OverviewResponse {
   modules: { name: string; lectures: LectureSummary[] }[];
 }
+
+export interface LectureResponse extends LectureSummary {
+  module: string;
+}

@@ -47,3 +47,25 @@ button:focus-visible { outline: 2px solid var(--good); outline-offset: 3px; }
 .lectures li + li { border-top: 1px solid var(--border); }
 .lecture-title { overflow-wrap: anywhere; min-width: 0; flex: 1 1 320px; }
 .page-count { white-space: nowrap; }
+a { color: inherit; text-underline-offset: 3px; }
+.lecture-view { height: 100dvh; display: flex; flex-direction: column; min-width: 540px; }
+.lecture-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.lecture-toolbar h1 { flex: 1; font-size: 1.1rem; margin: 0; overflow-wrap: anywhere; }
+.draft-warning { margin: 0; padding: 10px 20px; font-size: 0.85rem; background: var(--card); color: var(--muted); border-bottom: 1px solid var(--border); }
+.lecture-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 16px; scrollbar-gutter: stable; }
+.slide-rows { position: relative; }
+.slide-row { display: grid; grid-template-columns: var(--split) minmax(0, 1fr); align-items: stretch; margin-bottom: 20px; scroll-margin-top: 12px; }
+.slide-card, .note-card { margin: 0; background: var(--card); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.slide-card { margin-right: 8px; padding: 12px; }
+.note-card { margin-left: 8px; padding: 12px; display: flex; flex-direction: column; }
+.slide-card figcaption, .note-card label { display: block; font-size: 0.9rem; font-weight: 600; line-height: 1.5; margin-bottom: 10px; }
+.slide-placeholder { position: relative; background: white; width: 100%; }
+.pdf-canvas { position: absolute; inset: 0; }
+.pdf-canvas canvas { display: block; width: 100%; height: 100%; }
+.pdf-canvas [role=alert] { color: #b3261e; padding: 12px; }
+.note-card textarea { width: 100%; flex: 1; min-height: 100px; resize: none; font: inherit; line-height: 1.6; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 10px; overflow-y: auto; }
+.note-card textarea:focus-visible { outline: 2px solid var(--good); outline-offset: 2px; }
+.column-splitter { position: absolute; top: 0; bottom: 0; left: var(--split); transform: translateX(-50%); width: 12px; z-index: 1; cursor: col-resize; touch-action: none; }
+.column-splitter:hover, .column-splitter:focus-visible { background: var(--border); outline: 2px solid var(--good); }
+.jump-form { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.jump-form input { font: inherit; width: 100px; padding: 8px; }

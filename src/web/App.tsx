@@ -1,7 +1,19 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { OverviewResponse } from '../shared/api';
+const LectureView = lazy(() => import('./LectureView').then((module) => ({ default: module.LectureView })));
 
 export function App() {
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const update = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
+  const id = /^#vorlesung\/([a-f0-9]{16})$/.exec(hash)?.[1];
+  return id ? <Suspense fallback={<p role="status">Vorlesungsansicht wird geladen …</p>}><LectureView key={id} id={id} /></Suspense> : <Overview />;
+}
+
+function Overview() {
   const [overview, setOverview] = useState<OverviewResponse>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -41,7 +53,7 @@ export function App() {
               <ul className="lectures">
                 {module.lectures.map((lecture) => (
                   <li key={lecture.id}>
-                    <span className="lecture-title">{lecture.title}</span>
+                    <span className="lecture-title">{lecture.pageCount !== null ? <a href={`#vorlesung/${lecture.id}`}>{lecture.title}</a> : lecture.title}</span>
                     {lecture.pageCount !== null && <span className="page-count">{lecture.pageCount} {lecture.pageCount === 1 ? 'Seite' : 'Seiten'}</span>}
                     {lecture.error && <span className="bad">{lecture.error}</span>}
                   </li>

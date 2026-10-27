@@ -46,7 +46,7 @@ async function cachedMeta(path: string): Promise<Metadata | undefined> {
 
 export class Registry {
   private queue: Promise<unknown> = Promise.resolve();
-  private lectures = new Map<string, { pdfPath: string; summary: LectureSummary }>();
+  private lectures = new Map<string, { pdfPath: string; module: string; summary: LectureSummary }>();
 
   constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error'>) {}
 
@@ -60,7 +60,7 @@ export class Registry {
 
   private async scanFiles(): Promise<OverviewResponse> {
     const result: OverviewResponse = { modules: [] };
-    const next = new Map<string, { pdfPath: string; summary: LectureSummary }>();
+    const next = new Map<string, { pdfPath: string; module: string; summary: LectureSummary }>();
     await safePath(this.config.dataRoot, this.config.moduleRoot);
     await safePath(this.config.dataRoot, this.config.notesRoot);
     const modules = (await entries(this.config.moduleRoot)).filter((entry) => entry.isDirectory()).sort((a, b) => naturalCompare(a.name, b.name));
@@ -114,7 +114,7 @@ export class Registry {
           summary.error = 'PDF konnte nicht eingelesen werden. Datei und Zugriffsrechte prüfen (ggf. passwortgeschützt).';
         }
         lectures.push(summary);
-        next.set(summary.id, { pdfPath, summary });
+        next.set(summary.id, { pdfPath, module: module.name, summary });
       }
       result.modules.push({ name: module.name, lectures });
     }
