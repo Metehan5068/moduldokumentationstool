@@ -151,7 +151,9 @@ keine besuchte Seite voraus und bleibt bei erneutem Scan erhalten. Ein Fehler
 setzt den Haken zurück und zeigt eine Meldung. Die Startseite zeigt die höchste
 besuchte Folie getrennt von der Zahl nicht-leerer Notizen sowie unter „Weiter mit“
 die zuletzt geöffnete oder bearbeitete Vorlesung. Zurückscrollen verringert den
-Fortschritt nicht.
+Fortschritt nicht. Eine Folie zählt erst nach mindestens drei Sekunden
+ununterbrochener Sichtbarkeit im sichtbaren Tab oder sobald ihre Notiz bearbeitet
+wurde. Kurzes Durchscrollen, Fokus und Sprünge per `Strg+G` zählen allein nicht.
 
 Die Phase-4-Browser-Abnahme schließt den Tab bei Folie 13 mit halbem Seitenversatz
 und Cursorposition 84, beendet den echten Node-Serverprozess, startet ihn mit

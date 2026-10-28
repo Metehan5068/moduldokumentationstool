@@ -38,11 +38,19 @@ describe('state.json-Validierung', () => {
     for (const body of [{ ...state(), schemaVersion: 2 }, { ...state(), lastPage: '13' }, { ...state(), lastPage: 1.5 }, { ...state(), updatedAt: 'kaputt' }, { ...state(), selection: null }, { ...state(), path: '../fremd' }]) {
       expect((await app.inject({ method: 'PUT', url: `${url}/state`, payload: body })).statusCode).toBe(400);
     }
-    const reply = await put(state({ lastPage: 500, activeNotePage: -2 }));
+    const reply = await put(state({ lastPage: 500, activeNotePage: -2, maxPageVisited: 500 }));
     expect(reply.statusCode).toBe(200);
     expect(reply.json()).toMatchObject({ lastPage: 20, activeNotePage: 1, maxPageVisited: 20 });
     expect((await app.inject({ method: 'PUT', url: `${url}/completed`, payload: { completed: 'true' } })).statusCode).toBe(400);
   });
+});
+
+it('leitet Fortschritt weder aus sichtbarer Folie noch Fokus ab, zählt aber bearbeitete Notizen', async () => {
+  await setup();
+  await put(state({ lastPage: 20, activeNotePage: 20, maxPageVisited: 0 }));
+  expect((await app.inject(url)).json().state.maxPageVisited).toBe(0);
+  await app.inject({ method: 'PUT', url: `${url}/notes/13`, payload: { text: 'Bearbeitet', baseHash: noteHash('') } });
+  expect((await app.inject(url)).json().state).toMatchObject({ lastPage: 20, activeNotePage: 20, maxPageVisited: 13 });
 });
 
 it('persistiert Position und Auswahl atomar als UTF-8/LF und lädt sie nach Server-Neustart', async () => {

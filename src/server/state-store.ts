@@ -41,6 +41,15 @@ export class StateStore {
     try { return (await cachedMeta(await this.path(lecture, 'meta.json')))?.completed ?? false; }
     catch (err) { this.logger.warn({ err, lectureId: lecture.summary.id }, 'Erledigt-Status konnte nicht gelesen werden'); return false; }
   }
+  markEdited(lecture: Lecture, page: number): Promise<void> {
+    return this.writes.run(lecture.summary.id, async () => {
+      const previous = await this.read(lecture);
+      if (previous.state.maxPageVisited >= page) return;
+      const state = { ...previous.state, maxPageVisited: page,
+        ...(!previous.exists ? { lastPage: page, activeNotePage: page } : {}) };
+      await writeJson(this.config.notesRoot, await this.path(lecture, 'state.json'), state);
+    });
+  }
   setCompleted(lecture: Lecture, completed: boolean): Promise<boolean> {
     return this.writes.run(lecture.summary.id, async () => {
       const path = await this.path(lecture, 'meta.json');

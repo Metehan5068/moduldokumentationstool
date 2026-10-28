@@ -43,7 +43,7 @@ button:focus-visible { outline: 2px solid var(--good); outline-offset: 3px; }
 .module { margin: 24px 0; }
 .module h2 { font-size: 1.2rem; }
 .lectures { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
-.lectures li { padding: 16px 20px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px 24px; flex-wrap: wrap; }
+.lectures li { padding: 16px 20px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; align-items: baseline; }
 .lectures li + li { border-top: 1px solid var(--border); }
 .lecture-title { overflow-wrap: anywhere; min-width: 0; flex: 1 1 320px; }
 .page-count { white-space: nowrap; }
@@ -83,7 +83,7 @@ a { color: inherit; text-underline-offset: 3px; }
 .resume-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 28px; }
 .resume-card p { margin: 8px 0 0; color: var(--muted); }
 .resume-card a { padding: 10px 16px; border: 1px solid var(--border); border-radius: 6px; }
-.lecture-progress { font-size: 0.85rem; color: var(--muted); }
+.lecture-progress { grid-column: 1 / -1; font-size: 0.85rem; color: var(--muted); }
 .completed-toggle { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .position-error { padding: 10px 20px; color: var(--bad); }
 .position-error button { margin-left: 12px; }

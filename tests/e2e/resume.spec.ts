@@ -96,7 +96,9 @@ test('Plan-Abnahme: Folie 13 halb gescrollt, Cursor im Satz, Tab schließen, Ser
   await reopened.screenshot({ path: 'test-results/phase4-resume.png' });
   await reopened.getByRole('checkbox', { name: 'erledigt', exact: true }).check();
   await expect(reopened.getByRole('checkbox', { name: 'erledigt', exact: true })).toBeChecked();
-  await goTo(reopened, 20); await goTo(reopened, 3);
+  await goTo(reopened, 20);
+  await expect.poll(async () => (await (await request.get(`${baseURL}/api/lectures/${id}`)).json()).state.maxPageVisited, { timeout: 8000 }).toBe(20);
+  await goTo(reopened, 3);
   await reopened.getByRole('link', { name: '← Übersicht' }).click();
   const row = reopened.locator('.lectures li').filter({ has: reopened.getByRole('link', { name: title, exact: true }) });
   await expect(row).toContainText('✓ erledigt'); await expect(row).toContainText('1 Notiz');
@@ -200,4 +202,29 @@ test('fehlgeschlagenes Erledigt-Speichern wird angezeigt und der Haken zurückge
   expect((await (await page.request.get(`${baseURL}/api/lectures/${lecture}`)).json()).completed).toBe(false);
   await page.unroute(endpoint); await checkbox.check(); await expect(checkbox).toBeEnabled();
   expect((await (await page.request.get(`${baseURL}/api/lectures/${lecture}`)).json()).completed).toBe(true);
+});
+
+test('kurzer Strg+G-Sprung zählt nicht; ununterbrochene Sichtbarkeit und Notizbearbeitung zählen', async ({ page, request }) => {
+  const name = 'Besuchsregel'; const lecture = lectureId(`module/ids/${name}.pdf`);
+  await writeFile(join(root, 'module', 'ids', `${name}.pdf`), lecturePdf(20));
+  const maximum = async () => (await (await request.get(`${baseURL}/api/lectures/${lecture}`)).json()).state.maxPageVisited as number;
+  await page.goto(baseURL); await page.getByRole('link', { name, exact: true }).click();
+  await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
+  await goTo(page, 18); await goTo(page, 1);
+  await page.getByRole('link', { name: '← Übersicht' }).click();
+  await expect(page.getByRole('heading', { name: 'Moduldokumentation', exact: true })).toBeVisible();
+  expect(await maximum()).toBeLessThan(18);
+  const row = page.locator('.lectures li').filter({ has: page.getByRole('link', { name, exact: true }) });
+  const titleBox = await row.locator('.lecture-title').boundingBox(); const progressBox = await row.locator('.lecture-progress').boundingBox();
+  expect(progressBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);
+  await row.getByRole('link', { name, exact: true }).click(); await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
+  await goTo(page, 18);
+  // Fachliche Zeitgrenze: Zwei getrennte Aufenthalte von 1,8 s dürfen nicht addiert werden.
+  await page.waitForTimeout(1800); expect(await maximum()).toBeLessThan(18);
+  await goTo(page, 1); await goTo(page, 18);
+  await page.waitForTimeout(1800); expect(await maximum()).toBeLessThan(18);
+  await expect.poll(maximum, { timeout: 6500 }).toBeGreaterThanOrEqual(18);
+  await goTo(page, 20); await page.getByLabel('Notiz zu Folie 20', { exact: true }).fill('Bearbeitung zählt sofort');
+  await page.keyboard.press('Control+s'); await expect(page.locator('.lecture-toolbar [role=status]')).toHaveText('Gespeichert');
+  expect(await maximum()).toBe(20);
 });

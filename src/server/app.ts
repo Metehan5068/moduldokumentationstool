@@ -88,6 +88,10 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     }
     try {
       const saved = await notes.write(lecture, page, request.body.text, request.body.baseHash);
+      if (saved.hash !== request.body.baseHash) {
+        try { await states.markEdited(lecture, page); }
+        catch (err) { request.log.warn({ err, lectureId: request.params.id, page }, 'Fortschritt der bearbeiteten Notiz konnte nicht gespeichert werden'); }
+      }
       return { hash: saved.hash };
     } catch (err) {
       if (err instanceof NoteConflictError) return reply.code(409).send({ currentText: err.currentText, currentHash: noteHash(err.currentText) });

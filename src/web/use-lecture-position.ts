@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, t
 import type { LectureState } from '../shared/state';
 import { normalizeState } from '../shared/state';
 import { PositionSession } from './position-session';
+import { VisitTracker } from './visit-tracker';
 
 type Elements = {
   scroll: RefObject<HTMLDivElement | null>;
@@ -12,11 +13,13 @@ type Elements = {
 export function useLecturePosition(id: string, initial: LectureState | undefined, pageCount: number, elements: Elements, onPage: (page: number) => void) {
   const [, redraw] = useReducer((value: number) => value + 1, 0);
   const position = useMemo(() => initial ? new PositionSession(id, initial) : undefined, [id, initial]);
+  const visits = useMemo(() => position ? new VisitTracker(position.state.maxPageVisited) : undefined, [position]);
+  const visitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const ready = useRef(false);
   const lastActiveNote = useRef(1);
   const latestElements = useRef(elements); latestElements.current = elements;
-  const capture = useCallback(() => {
-    if (!ready.current || !position) return;
+  const capture = useCallback((): void => {
+    if (!ready.current || !position || !visits) return;
     const { scroll, rows, notes, activePage } = latestElements.current;
     const container = scroll.current;
     if (!container) return;
@@ -25,14 +28,19 @@ export function useLecturePosition(id: string, initial: LectureState | undefined
     let page = 1;
     let offset = 0;
     let found = false;
-    let maxPageVisited = position.state.maxPageVisited;
+    const visible: number[] = [];
     for (const [index, row] of rows.current.entries()) {
       if (!row) continue;
       const rect = row.getBoundingClientRect();
-      if (rect.bottom > top + 1 && rect.top < top + container.clientHeight - 1) maxPageVisited = Math.max(maxPageVisited, index + 1);
+      const slide = row.querySelector('.slide-placeholder')?.getBoundingClientRect();
+      if (slide && slide.bottom > top + 1 && slide.top < top + container.clientHeight - 1) visible.push(index + 1);
       // scrollTop wird gerundet; ein Rest unter einem CSS-Pixel gehört zur nächsten Zeile.
       if (!found && rect.bottom > top + 1) { page = index + 1; offset = Math.min(1, Math.max(0, (top - rect.top) / rect.height)); found = true; }
     }
+    const maxPageVisited = visits.update(visible, document.visibilityState === 'visible');
+    clearTimeout(visitTimer.current);
+    const delay = visits.nextDelay();
+    if (delay !== undefined) visitTimer.current = setTimeout(capture, Math.max(1, delay));
     const focusedIndex = notes.current.findIndex((note) => note === document.activeElement);
     if (focusedIndex >= 0) { activePage.current = focusedIndex + 1; lastActiveNote.current = focusedIndex + 1; }
     const active = notes.current[lastActiveNote.current - 1];
@@ -41,7 +49,7 @@ export function useLecturePosition(id: string, initial: LectureState | undefined
       selection: { start: active?.selectionStart ?? 0, end: active?.selectionEnd ?? 0 }, maxPageVisited,
     }, pageCount);
     position.update(state);
-  }, [position, pageCount]);
+  }, [position, visits, pageCount]);
 
   useLayoutEffect(() => {
     if (!position) return;
@@ -63,7 +71,7 @@ export function useLecturePosition(id: string, initial: LectureState | undefined
     capture();
     // Auch Öffnen ohne weiteres Scrollen zählt als letzte Aktivität.
     position.update(position.state, true);
-    return () => { capture(); ready.current = false; };
+    return () => { capture(); ready.current = false; clearTimeout(visitTimer.current); };
   }, [position, pageCount, capture, onPage]);
 
   useEffect(() => {
@@ -81,23 +89,28 @@ export function useLecturePosition(id: string, initial: LectureState | undefined
       scheduleCapture();
     };
     const flush = () => { capture(); void position.flush(true); };
-    const visibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    const visibility = () => { if (document.visibilityState === 'hidden') flush(); else capture(); };
+    const input = (event: Event) => {
+      const index = latestElements.current.notes.current.findIndex((note) => note === event.target);
+      if (index >= 0) visits?.edited(index + 1);
+      capture();
+    };
     container?.addEventListener('scroll', scheduleCapture, { passive: true });
     container?.addEventListener('focusin', focusIn);
-    container?.addEventListener('input', scheduleCapture);
+    container?.addEventListener('input', input);
     document.addEventListener('selectionchange', scheduleCapture);
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', visibility);
     return () => {
-      capture(); cancelAnimationFrame(frame); unsubscribe(); position.dispose();
+      capture(); clearTimeout(visitTimer.current); cancelAnimationFrame(frame); unsubscribe(); position.dispose();
       container?.removeEventListener('scroll', scheduleCapture);
       container?.removeEventListener('focusin', focusIn);
-      container?.removeEventListener('input', scheduleCapture);
+      container?.removeEventListener('input', input);
       document.removeEventListener('selectionchange', scheduleCapture);
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [position, capture]);
+  }, [position, visits, capture]);
 
   const flush = useCallback(async (keepalive = false) => { capture(); await position?.flush(keepalive); }, [capture, position]);
   return { flush, error: position?.error };

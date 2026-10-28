@@ -21,7 +21,7 @@ export function normalizeState(state: LectureState, pageCount: number): LectureS
     schemaVersion: 1, lastPage, activeNotePage,
     pageOffsetRatio: clamp(state.pageOffsetRatio, 0, 1),
     selection: { start, end: clamp(Math.trunc(state.selection.end), start, 500000) },
-    maxPageVisited: clamp(Math.max(lastPage, activeNotePage, Math.trunc(state.maxPageVisited)), 1, count),
+    maxPageVisited: clamp(Math.trunc(state.maxPageVisited), 0, count),
     updatedAt: new Date(state.updatedAt).toISOString(),
   };
 }
