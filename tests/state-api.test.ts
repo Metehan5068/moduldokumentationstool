@@ -80,7 +80,9 @@ it('erhält erledigt bei Rescan und PDF-Änderung sowie Hash und Notizen beim Um
   await app.inject({ method: 'PUT', url: `${url}/notes/1`, payload: { text: 'Bleibt erhalten', baseHash: noteHash('') } });
   const notes = await readFile(join(directory, 'notes.md'), 'utf8');
   expect((await app.inject({ method: 'PUT', url: `${url}/completed`, payload: { completed: true } })).statusCode).toBe(200);
-  expect(JSON.parse(await readFile(metaPath, 'utf8'))).toEqual({ ...before, completed: true });
+  // Die Hintergrundextraktion darf ihre eigenen Metadaten ergänzen; Quelldaten bleiben erhalten.
+  const { pagesWithoutText: _pages, sourceTextSha256: _textHash, sourcePageTitles: _titles, ...stableBefore } = before;
+  expect(JSON.parse(await readFile(metaPath, 'utf8'))).toMatchObject({ ...stableBefore, completed: true });
   await writeFile(join(root, 'module', 'ids', 'Test.pdf'), testPdf(21));
   await Promise.all([app.inject('/api/overview'), app.inject({ method: 'PUT', url: `${url}/completed`, payload: { completed: true } }), put(state())]);
   expect((await app.inject(url)).json().completed).toBe(true);

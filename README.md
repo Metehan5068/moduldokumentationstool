@@ -160,3 +160,43 @@ und Cursorposition 84, beendet den echten Node-Serverprozess, startet ihn mit
 demselben Datenordner neu und öffnet die Vorlesung über „Weiter mit“. Zusätzlich
 werden unabhängige Scroll- und Fokuspositionen, andere Fensterbreiten, der
 Scroll-Throttle und Fehler beim Erledigt-Speichern geprüft.
+
+## KI-Lesbarkeit (Phase 5)
+
+Nach einem Scan läuft die Textextraktion für alle PDFs im Hintergrund, jeweils
+eine PDF zur Zeit. Sie wartet nicht darauf, dass eine Vorlesung geöffnet wird,
+und blockiert die Übersicht nicht. Unter `notes/<Modul>/<Vorlesung>/source.md`
+steht der Folientext mit eindeutigen Überschriften `## Seite N`, SHA-256,
+Erzeugungszeitpunkt und einem Hinweis auf das maßgebliche PDF. Textfragmente werden
+über Zeilenenden und ihre vertikale Position zu Zeilen zusammengesetzt.
+Leere bzw. nicht als Text lesbare Seiten erhalten einen Platzhalter; deren Nummern
+stehen in `meta.json` unter `pagesWithoutText`. Es gibt kein OCR.
+
+Unveränderte Quellen werden auch nach Neustart nicht erneut extrahiert. Der Cache
+ist an den PDF-Hash gebunden; eine fehlende generierte Quelldatei wird wieder
+angelegt. Wird die PDF während der Extraktion ersetzt, verwirft die App den
+veralteten Stand. Fehler werden mit Ursache geloggt, weitere PDFs bleiben in der
+Queue. Worker, Schriften und Decoder kommen ausschließlich aus lokalen Dateien.
+
+Die erste Textzeile jeder Seite wird als Folientitel in den generierten
+`## Folie N · Titel`-Überschriften verwendet. Bestehende Notizen erhalten die Titel
+nach der Extraktion; neue bzw. bearbeitete Notizen beim Speichern. Der Nutzertext
+bleibt erhalten, auch bei parallelem Schreiben. Kaputte Notizdateien werden
+unverändert gelassen und müssen vor einer Aktualisierung repariert werden.
+
+Im Datenordner entstehen zusätzlich:
+
+- `INDEX.md`: Gesamtübersicht mit Seitenzahl, Notizanzahl, Fortschritt, Datum und
+  relativen Links. Sie wird nach Scans und gedrosselt nach Speichervorgängen atomar
+  aktualisiert.
+- `CLAUDE.md`: Hinweise zur Dateistruktur, Seitenzuordnung, Eigentümerschaft der
+  Notizen und Antworten mit Fundstellen. Die App legt diese Datei ausschließlich
+  mit exklusivem Erstellen an. Eine vorhandene Datei wird **nie überschrieben**,
+  auch wenn `DATA_ROOT` das Code-Repo selbst ist.
+
+Für Inhaltsfragen kann ein KI-Agent direkt im Datenordner gestartet werden.
+`notes.md` und `source.md` sind über dieselbe 1-basierte Seitennummer zugeordnet.
+Diagramme und Seiten ohne extrahierbaren Text müssen im PDF nachgeschlagen werden.
+Die Browser-Abnahme prüft offene Fragen und Folientexte anhand der erzeugten
+Dateien, einschließlich PDFs, die nie geöffnet wurden, sowie eigene Ergänzungen
+an der Datenordner-`CLAUDE.md`.

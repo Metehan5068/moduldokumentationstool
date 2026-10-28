@@ -11,20 +11,28 @@ import { NoteConflictError, noteHash, NotesParseError, NotesStore } from './note
 import { StateStore } from './state-store.js';
 import { WriteQueue } from './write-queue.js';
 import type { LectureState } from '../shared/state.js';
+import { KnowledgeService } from './knowledge.js';
 
 export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { coerceTypes: false, removeAdditional: false } } });
   const writes = new WriteQueue();
   const registry = new Registry(config, app.log, writes);
-  const notes = new NotesStore(config, writes);
+  const notes = new NotesStore(config, writes, app.log);
   const states = new StateStore(config, app.log, writes);
+  const knowledge = new KnowledgeService(config, app.log, writes, notes, states);
+  app.addHook('onClose', () => knowledge.close());
+  async function scanRegistry() {
+    const result = await registry.scan();
+    knowledge.afterScan(registry.all());
+    return result;
+  }
 
   // Nur explizite ID-Routen dürfen PDFs ausliefern; kein öffentlicher Datenordner.
   await app.register(fastifyStatic, { root: config.moduleRoot, serve: false });
 
   async function findLecture(id: string) {
     if (!/^[a-f0-9]{16}$/.test(id)) return undefined;
-    if (!registry.get(id)) await registry.scan();
+    if (!registry.get(id)) await scanRegistry();
     return registry.get(id);
   }
 
@@ -59,7 +67,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     const lecture = await findLecture(request.params.id);
     if (!lecture) return reply.code(404).send({ error: 'not_found' });
     if (lecture.summary.pageCount === null) return reply.code(400).send({ error: 'pdf_unavailable' });
-    try { return await states.write(lecture, request.body); }
+    try { const state = await states.write(lecture, request.body); knowledge.requestIndex(); return state; }
     catch (err) { request.log.error({ err, lectureId: request.params.id }, 'Leseposition konnte nicht gespeichert werden'); return reply.code(500).send({ error: 'save_failed' }); }
   });
 
@@ -69,7 +77,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     if (!request.headers['content-type']?.toLowerCase().startsWith('application/json')) return reply.code(415).send({ error: 'json_required' });
     const lecture = await findLecture(request.params.id);
     if (!lecture) return reply.code(404).send({ error: 'not_found' });
-    try { return { completed: await states.setCompleted(lecture, request.body.completed) }; }
+    try { const completed = await states.setCompleted(lecture, request.body.completed); knowledge.requestIndex(); return { completed }; }
     catch (err) { request.log.error({ err, lectureId: request.params.id }, 'Erledigt-Status konnte nicht gespeichert werden'); return reply.code(500).send({ error: 'save_failed' }); }
   });
 
@@ -92,6 +100,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
         try { await states.markEdited(lecture, page); }
         catch (err) { request.log.warn({ err, lectureId: request.params.id, page }, 'Fortschritt der bearbeiteten Notiz konnte nicht gespeichert werden'); }
       }
+      knowledge.requestIndex();
       return { hash: saved.hash };
     } catch (err) {
       if (err instanceof NoteConflictError) return reply.code(409).send({ currentText: err.currentText, currentHash: noteHash(err.currentText) });
@@ -117,7 +126,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
   });
 
   async function overview(): Promise<OverviewResponse> {
-    const result = await registry.scan();
+    const result = await scanRegistry();
     for (const module of result.modules) for (const summary of module.lectures) {
       const lecture = registry.get(summary.id);
       if (!lecture) continue;

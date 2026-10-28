@@ -23,6 +23,8 @@ export interface Metadata {
   completed: boolean;
   sourceSize: number;
   sourceMtimeMs: number;
+  sourceTextSha256?: string;
+  sourcePageTitles?: Record<number, string>;
 }
 
 async function entries(path: string): Promise<Dirent[]> {
@@ -52,6 +54,7 @@ export class Registry {
   constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error'>, private readonly writes = new WriteQueue()) {}
 
   get(id: string) { return this.lectures.get(id); }
+  all() { return [...this.lectures.values()]; }
 
   scan(): Promise<OverviewResponse> {
     const scan = this.queue.then(() => this.scanFiles());
@@ -108,6 +111,9 @@ export class Registry {
                 await writeJson(this.config.notesRoot, metaPath, {
                   ...meta, completed: current?.completed ?? meta.completed,
                   acceptedSha256: current?.acceptedSha256 ?? meta.acceptedSha256,
+                  sourceTextSha256: current?.sourceTextSha256 ?? meta.sourceTextSha256,
+                  sourcePageTitles: current?.sourcePageTitles ?? meta.sourcePageTitles,
+                  pagesWithoutText: current?.sourceTextSha256 === meta.sourceSha256 ? current.pagesWithoutText : meta.pagesWithoutText,
                 });
               });
             } catch (err) {

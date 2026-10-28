@@ -43,3 +43,24 @@ export function lecturePdf(pageCount: number): Buffer {
   pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(pdf);
 }
+
+/** Kleine Text-/Leerseiten für die KI-Lesbarkeitsabnahme (WinAnsi/Latin-1). */
+export function textPdf(pages: string[][]): Buffer {
+  const count = pages.length; const font = count * 2 + 3;
+  const escape = (text: string) => text.replaceAll('\\', '\\\\').replaceAll('(', '\\(').replaceAll(')', '\\)');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Count ${count} /Kids [${pages.map((_, index) => `${index + 3} 0 R`).join(' ')}] >>`,
+    ...pages.map((_, index) => `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 338] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${count + index + 3} 0 R >>`),
+    ...pages.map((lines) => {
+      const content = `BT /F1 16 Tf 40 280 Td\n${lines.map((line, index) => `${index ? '0 -24 Td ' : ''}(${escape(line)}) Tj`).join('\n')}\nET\n`;
+      return `<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}endstream`;
+    }),
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+  ];
+  let pdf = '%PDF-1.4\n'; const offsets = [0];
+  for (const [index, object] of objects.entries()) { offsets.push(Buffer.byteLength(pdf, 'latin1')); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; }
+  const xref = Buffer.byteLength(pdf, 'latin1');
+  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}`;
+  return Buffer.from(`${pdf}trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`, 'latin1');
+}
