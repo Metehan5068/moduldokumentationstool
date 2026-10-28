@@ -13,6 +13,7 @@ import { extractPdf, sourceMarkdown, SOURCE_TEXT_VERSION } from './pdf-text.js';
 import type { OrphanSummary } from '../shared/api.js';
 
 type Lecture = NonNullable<ReturnType<Registry['get']>>;
+const backupNotice = 'notes/.relink-backups/ und notes/.relink-staging/ sind Sicherungskopien. Bei Inhaltsfragen ignorieren.';
 const guide = `# Studiennotizen – Hinweise für KI-Agenten
 
 Die Dateien bleiben lokal. Beantworte Inhaltsfragen mit Fundstelle, z. B. „IDS-3, Folie 12“.
@@ -28,6 +29,7 @@ Die Dateien bleiben lokal. Beantworte Inhaltsfragen mit Fundstelle, z. B. „IDS
   Maßgeblich ist das PDF. Prüfe bei Quellenänderungen sha256 in source.md gegen sourceSha256 in meta.json.
 - meta.json, state.json, source.md und INDEX.md sind generiert. state.json speichert Leseposition und Fortschritt.
 - INDEX.md ist die Gesamtübersicht mit Modul, Seiten, Notizanzahl, Fortschritt und relativen Dateilinks.
+- ${backupNotice}
 - Falls source.md noch fehlt, kann die Hintergrundextraktion noch laufen. Fehler stehen im Server-Log.
 
 Diese CLAUDE.md wird nur einmal angelegt und niemals von der App überschrieben. Der Nutzer darf sie erweitern.
@@ -44,6 +46,7 @@ export class KnowledgeService {
   private indexRunner?: Promise<void>;
   private indexDirty = false;
   private closing = false;
+  private guideChecked = false;
   constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error' | 'warn'>,
     private readonly writes: WriteQueue, private readonly notes: NotesStore, private readonly states: StateStore,
     private readonly extract: typeof extractPdf = extractPdf, private readonly getOrphans?: () => Promise<OrphanSummary[]>) {}
@@ -113,13 +116,22 @@ export class KnowledgeService {
     if (immediate) { clearTimeout(this.indexTimer); this.indexTimer = undefined; }
     if (this.indexTimer === undefined) this.indexTimer = setTimeout(() => { this.indexTimer = undefined; void this.flushIndex(); }, immediate ? 0 : 1000);
   }
-  private async ensureGuide() {
+  async ensureGuide() {
+    if (this.guideChecked) return;
     const path = containedPath(this.config.dataRoot, 'CLAUDE.md');
     await safePath(this.config.dataRoot, path); await mkdir(this.config.dataRoot, { recursive: true });
     try {
       const file = await open(path, 'wx'); // Exklusiv anlegen: auch bei konkurrierenden Starts niemals überschreiben.
       try { await file.writeFile(guide, 'utf8'); await file.sync(); } finally { await file.close(); }
-    } catch (err) { if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err; }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      const existing = await readFile(path, 'utf8');
+      const hasNotice = existing.split(/\r?\n\s*\r?\n/).some((paragraph) =>
+        paragraph.includes('notes/.relink-backups/') && paragraph.includes('notes/.relink-staging/')
+        && /Sicherungskopien/i.test(paragraph) && /ignorier/i.test(paragraph));
+      if (!hasNotice) this.logger.warn({ path }, `Vorhandene CLAUDE.md enthält keinen Hinweis auf Relink-Sicherungen. Bitte ergänzen: ${backupNotice} Die Datei wird nicht überschrieben.`);
+    }
+    this.guideChecked = true;
   }
   private async indexMarkdown(lectures: Lecture[]): Promise<string> {
     const lines = ['# Übersicht Studiennotizen', `_Automatisch generiert. Stand: ${new Date().toISOString()}_`, ''];

@@ -32,7 +32,11 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     knowledge.afterScan(registry.all());
     return result;
   }
-  app.addHook('onReady', async () => { await scanRegistry(); });
+  app.addHook('onReady', async () => {
+    try { await knowledge.ensureGuide(); }
+    catch (err) { app.log.error({ err }, 'KI-Hinweise konnten nicht geprüft oder angelegt werden'); }
+    await scanRegistry();
+  });
 
   // Nur explizite ID-Routen dürfen PDFs ausliefern; kein öffentlicher Datenordner.
   await app.register(fastifyStatic, { root: config.moduleRoot, serve: false });
@@ -65,7 +69,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     schema: { body: { type: 'object', additionalProperties: false, required: ['sourceSha256'], properties: { sourceSha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } } } },
   }, async (request, reply) => {
     const lecture = await findLecture(request.params.id); if (!lecture) return reply.code(404).send({ error: 'not_found' });
-    try { const result = await sources.accept(lecture, request.body.sourceSha256); knowledge.requestIndex(); return result; }
+    try { const result = await sources.accept(lecture, request.body.sourceSha256); knowledge.afterScan(registry.all()); return result; }
     catch (err) {
       if (err instanceof ChangedAgainError) return reply.code(409).send({ error: 'source_changed_again', message: err.message });
       request.log.error({ err }, 'Quellenbestätigung fehlgeschlagen'); return reply.code(500).send({ error: 'save_failed' });

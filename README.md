@@ -183,6 +183,10 @@ Die Zeile mit der größten Schrifthöhe in der oberen Seitenhälfte wird als Fo
 nach der Extraktion; neue bzw. bearbeitete Notizen beim Speichern. Der Nutzertext
 bleibt erhalten, auch bei parallelem Schreiben. Kaputte Notizdateien werden
 unverändert gelassen und müssen vor einer Aktualisierung repariert werden.
+Bei ungeprüfter Quellenänderung (`sourceSha256` ≠ `acceptedSha256`) bleiben die
+bisherigen Notiztitel erhalten, auch beim Autosave. Erst „Zuordnung geprüft“
+stößt ihre Aktualisierung an; eine noch laufende Extraktion liefert die Titel
+anschließend nach. `source.md` wird unabhängig davon weiter aktualisiert.
 
 Identische Zeilen auf mindestens 30 % der Seiten (mindestens zwei verschiedenen
 Seiten) gelten als Boilerplate. Sie stehen nur einmal im Kopf von `source.md`
@@ -201,6 +205,11 @@ Im Datenordner entstehen zusätzlich:
   Notizen und Antworten mit Fundstellen. Die App legt diese Datei ausschließlich
   mit exklusivem Erstellen an. Eine vorhandene Datei wird **nie überschrieben**,
   auch wenn `DATA_ROOT` das Code-Repo selbst ist.
+
+Die Vorlage weist darauf hin, `notes/.relink-backups/` und
+`notes/.relink-staging/` als Sicherungskopien bei Inhaltsfragen zu ignorieren.
+Fehlt dieser Hinweis in einer vorhandenen `CLAUDE.md`, nennt das Server-Log
+beim Start den Dateipfad und den zu ergänzenden Hinweis.
 
 Für Inhaltsfragen kann ein KI-Agent direkt im Datenordner gestartet werden.
 `notes.md` und `source.md` sind über dieselbe 1-basierte Seitennummer zugeordnet.

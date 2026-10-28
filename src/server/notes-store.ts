@@ -59,7 +59,8 @@ export class NotesStore {
   private async titles(lecture: Lecture): Promise<Record<number, string> | undefined> {
     try {
       const meta = await cachedMeta(await this.path(lecture, 'meta.json'));
-      if (!meta || meta.sourceTextSha256 !== meta.sourceSha256 || meta.sourceTextVersion !== SOURCE_TEXT_VERSION) return undefined;
+      if (!meta || meta.sourceSha256 !== meta.acceptedSha256
+        || meta.sourceTextSha256 !== meta.sourceSha256 || meta.sourceTextVersion !== SOURCE_TEXT_VERSION) return undefined;
       const header = (await readFile(await this.path(lecture, 'source.md'), 'utf8')).split('\n').slice(0, 8);
       return header.includes(`sha256: ${meta.sourceSha256}`) ? meta.sourcePageTitles ?? {} : undefined;
     } catch (err) { this.logger?.warn({ err, lectureId: lecture.summary.id }, 'Folientitel konnten nicht gelesen werden'); return undefined; }

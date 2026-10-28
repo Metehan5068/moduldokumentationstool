@@ -112,7 +112,7 @@ it('verwirft veraltete Extraktion und erhält Notizen und erledigt bei parallele
   expect(source).toContain('Aktuelle Quelle'); expect(source).not.toContain('## Seite 1\nAlt');
   expect(meta.sourceSha256).toBe(sha(textPdf([['Aktueller Titel', 'Aktuelle Quelle']])));
   const notes = await read(join(dir('Test'), 'notes.md'));
-  expect(parseNotes(notes).notes[1]).toBe('Offene Frage bleibt erhalten'); expect(notes).toContain('## Folie 1 · Aktueller Titel');
+  expect(parseNotes(notes).notes[1]).toBe('Offene Frage bleibt erhalten'); expect(notes).not.toContain('## Folie 1 · Aktueller Titel');
 });
 
 it('aktualisiert neue Notizen mit Folientitel und den Index nach Speichern, State und erledigt', async () => {
@@ -171,4 +171,64 @@ it('folgt keinen Junctions außerhalb von notes und überschreibt keine externe 
   await app.inject('/api/overview'); await app.close();
   expect(await read(join(outside, 'INDEX.md'))).toBe('Nicht überschreiben');
   await expect(read(join(outside, 'source.md'))).rejects.toMatchObject({ code: 'ENOENT' });
+});
+
+it.each(['vor', 'nach'] as const)('aktualisiert Titel erst nach Bestätigung, auch %s Abschluss der Extraktion', async (timing) => {
+  await setup({ 'Test.pdf': [['Alter Titel'], ['Bisheriger Titel'], ['Entfallene Folie']] });
+  await app.ready(); await app.close();
+  const notesPath = join(dir('Test'), 'notes.md');
+  const document = newNotes('module/ids/Test.pdf', 'Test', 3);
+  document.notes = { 1: 'Meine Frage', 2: 'Zweite Frage', 3: 'Ohne Folie behalten' };
+  document.titles = { 1: 'Alter Titel', 2: 'Bisheriger Titel', 3: 'Entfallene Folie' };
+  const original = serializeNotes(document); await writeFile(notesPath, original);
+  await writeFile(join(root, 'module', 'ids', 'Test.pdf'), textPdf([['Neuer Titel'], []]));
+  const actual = text.extractPdf;
+  let release!: () => void; const gate = new Promise<void>((resolve) => { release = resolve; });
+  const extract = vi.spyOn(text, 'extractPdf').mockImplementationOnce(async (data) => { await gate; return actual(data); });
+  app = await buildApp(loadConfig({ DATA_ROOT: root }));
+  const id = lectureId('module/ids/Test.pdf');
+  try {
+    await app.ready(); await vi.waitFor(() => expect(extract).toHaveBeenCalledTimes(1));
+    if (timing === 'nach') {
+      release();
+      await vi.waitFor(async () => {
+        const meta = JSON.parse(await read(join(dir('Test'), 'meta.json')));
+        expect(meta.sourceTextSha256).toBe(meta.sourceSha256);
+      });
+    }
+    expect(await read(notesPath)).toBe(original);
+    // Auch ein normales Autosave darf bei ungeprüfter Zuordnung keinen Titel ändern oder entfernen.
+    for (const page of [1, 2]) {
+      const response = await app.inject({ method: 'PUT', url: `/api/lectures/${id}/notes/${page}`,
+        payload: { text: `Bearbeitete Frage ${page}`, baseHash: noteHash(document.notes[page]!) } });
+      expect(response.statusCode).toBe(200);
+    }
+    expect(parseNotes(await read(notesPath)).titles).toEqual(document.titles);
+    const detail = (await app.inject(`/api/lectures/${id}`)).json(); expect(detail.sourceChanged).toBe(true);
+    const accepted = await app.inject({ method: 'POST', url: `/api/lectures/${id}/accept-source`, payload: { sourceSha256: detail.sourceSha256 } });
+    expect(accepted.statusCode).toBe(200);
+  } finally { release(); await app.close(); }
+  const updated = parseNotes(await read(notesPath));
+  expect(updated.titles).toEqual({ 1: 'Neuer Titel', 2: '', 3: 'Entfallene Folie' });
+  expect(updated.notes).toEqual({ 1: 'Bearbeitete Frage 1', 2: 'Bearbeitete Frage 2', 3: 'Ohne Folie behalten' });
+});
+
+it('legt den Sicherungshinweis an und prüft vorhandene CLAUDE.md beim Start ohne Überschreiben', async () => {
+  await setup({});
+  const initialWarning = vi.spyOn(app.log, 'warn'); await app.ready(); await app.close();
+  const path = join(root, 'CLAUDE.md'); const guide = await read(path);
+  expect(guide).toContain('notes/.relink-backups/ und notes/.relink-staging/ sind Sicherungskopien. Bei Inhaltsfragen ignorieren.');
+  expect(initialWarning).not.toHaveBeenCalled();
+
+  const ownGuide = '# Eigene Regeln\n\nMeine Hinweise bleiben erhalten.\n'; await writeFile(path, ownGuide);
+  app = await buildApp(loadConfig({ DATA_ROOT: root })); const warning = vi.spyOn(app.log, 'warn');
+  await app.ready(); // Ohne HTTP-Anfrage muss der Hinweis bereits im Start-Log stehen.
+  expect(warning).toHaveBeenCalledWith({ path }, expect.stringContaining('Bitte ergänzen: notes/.relink-backups/'));
+  await app.inject('/api/overview'); await app.inject('/api/overview'); await app.close();
+  expect(warning).toHaveBeenCalledTimes(1); expect(await read(path)).toBe(ownGuide);
+
+  await writeFile(path, `${guide.replaceAll('\n', '\r\n')}\r\nEigene Ergänzung\r\n`);
+  app = await buildApp(loadConfig({ DATA_ROOT: root })); const currentWarning = vi.spyOn(app.log, 'warn');
+  await app.ready(); await app.close(); expect(currentWarning).not.toHaveBeenCalled();
+  expect(await read(path)).toBe(`${guide.replaceAll('\n', '\r\n')}\r\nEigene Ergänzung\r\n`);
 });
