@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { buildApp } from './helpers/app';
 import { loadConfig } from '../src/server/config';
 import { lectureId } from '../src/server/registry';
 import { testPdf } from './fixtures/pdf';

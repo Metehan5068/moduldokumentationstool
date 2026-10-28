@@ -87,3 +87,10 @@ a { color: inherit; text-underline-offset: 3px; }
 .completed-toggle { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .position-error { padding: 10px 20px; color: var(--bad); }
 .position-error button { margin-left: 12px; }
+.source-warning { padding: 12px 20px; border-bottom: 1px solid var(--bad); background: var(--card); }
+.source-warning p { margin: 0 0 8px; }
+.source-badge { grid-column: 1 / -1; color: var(--bad); font-size: 0.9rem; }
+.relink-form { grid-column: 1 / -1; display: grid; gap: 10px; }
+.relink-form select { font: inherit; min-width: 0; width: 100%; padding: 8px; }
+.relink-form p { margin: 0; color: var(--muted); }
+.relink-form button { justify-self: start; }

@@ -208,3 +208,42 @@ Diagramme und Seiten ohne extrahierbaren Text müssen im PDF nachgeschlagen werd
 Die Browser-Abnahme prüft offene Fragen und Folientexte anhand der erzeugten
 Dateien, einschließlich PDFs, die nie geöffnet wurden, sowie eigene Ergänzungen
 an der Datenordner-`CLAUDE.md`.
+
+## Robustheit (Phase 6)
+
+Beim Öffnen und erneuten Einlesen erkennt die App ersetzte PDFs. Weicht deren
+Hash von der zuletzt bestätigten Quelle ab, zeigt sie „Quelle geändert“ mit
+vorheriger und aktueller Seitenzahl. Notizen behalten ihre Seitennummern.
+„Zuordnung geprüft“ bestätigt genau die angezeigte PDF-Version; eine inzwischen
+erneut ersetzte PDF wird mit einer Fehlermeldung abgewiesen. `acceptedPageCount`
+in `meta.json` hält die zuletzt bestätigte Seitenzahl fest.
+
+Notizen oberhalb der aktuellen Seitenzahl stehen unter „Notizen ohne Folie“.
+Sie lassen sich weiter bearbeiten und kopieren, einschließlich Autosave und
+Konfliktauflösung. Der separate Schreibendpunkt `detached-notes/:page` erlaubt
+ausschließlich bereits vorhandene Notizseiten außerhalb der PDF.
+
+Umbenannte, verschobene oder gelöschte PDFs hinterlassen „Notizen ohne PDF“ in
+der Übersicht und im `INDEX.md`. Ein identischer PDF-Hash erzeugt den Vorschlag
+„umbenannt?“. „Mit PDF verknüpfen…“ ordnet den Ordner erst nach Auswahl und
+Bestätigung einer PDF zu. Ziele mit Notizen oder eigenen Dateien werden nicht
+überschrieben. Eigene Dateien im ursprünglichen Ordner bleiben erhalten.
+Der Relink bereitet die neue Zuordnung separat vor, prüft zwischenzeitliche
+Notizänderungen und bewahrt Original- und Zielordner unter
+`notes/.relink-backups/<Kennung>/` auf. Bei einem fehlgeschlagenen Verschieben
+werden die Ordner zurückgesetzt; Sicherungen bleiben auch bei einem
+fehlgeschlagenen Zurücksetzen erhalten. PDFs werden dabei ausschließlich gelesen.
+
+Alle HTTP-Anfragen benötigen einen lokalen `Host` mit dem tatsächlichen
+Server-Port. Schreibende Anfragen benötigen außerdem `Content-Type:
+application/json` und einen `Origin` wie `http://127.0.0.1:3000` oder
+`http://localhost:3000` (bei geändertem Port entsprechend angepasst).
+Fehlende oder fremde Origins und Hosts werden abgewiesen; weitergeleitete
+Host-Header ersetzen diese Prüfung nicht. Der Vite-Proxy übersetzt ausschließlich
+den eigenen lokalen Entwicklungs-Origin auf den Backend-Origin. Eigene
+API-Clients müssen die Header ebenfalls explizit setzen.
+
+Die Tests prüfen außerdem defekte und tatsächlich passwortgeschützte PDFs,
+beschädigte Notizdateien, parallele Änderungen, Relink-Rollback und Pfadgrenzen.
+Die Browser-Abnahme ersetzt, benennt um und löscht Fixture-PDFs und prüft dabei
+Notizerhalt, Bearbeitung verwaister Seiten, Bestätigung und Origin-/Host-Schutz.

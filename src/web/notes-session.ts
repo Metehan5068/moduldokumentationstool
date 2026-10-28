@@ -23,7 +23,7 @@ export class NotesSession {
   private disposed = false;
   private leaving = false;
 
-  constructor(readonly id: string, private initial: Record<number, NoteValue>, readOnlyError?: NotesFileError) {
+  constructor(readonly id: string, private initial: Record<number, NoteValue>, readOnlyError?: NotesFileError, private readonly pageCount = Infinity) {
     this.readOnlyError = readOnlyError;
     for (const page of Object.keys(initial)) this.get(Number(page));
   }
@@ -67,7 +67,7 @@ export class NotesSession {
     draft.status = 'saving';
     const request = Promise.resolve().then(async () => {
       try {
-        const response = await fetch(`/api/lectures/${this.id}/notes/${page}`, {
+        const response = await fetch(`/api/lectures/${this.id}/${page > this.pageCount ? 'detached-notes' : 'notes'}/${page}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, baseHash }), keepalive: keepalive || this.leaving,
         });
         if (response.status === 409) {

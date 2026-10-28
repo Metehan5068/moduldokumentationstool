@@ -1,9 +1,9 @@
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../src/server/app';
+import { buildApp } from './helpers/app';
 import { loadConfig } from '../src/server/config';
 import { lectureId } from '../src/server/registry';
 import { noteHash } from '../src/server/notes-store';
@@ -96,6 +96,7 @@ it('verhindert Schreiben durch nachträglich gesetzte Junctions außerhalb von n
   await setup();
   const directory = join(root, 'notes', 'ids', 'Test');
   const outside = join(root, 'outside');
+  await vi.waitFor(async () => expect(JSON.parse(await readFile(join(directory, 'meta.json'), 'utf8')).sourceTextVersion).toBeDefined(), { timeout: 5000 });
   await mkdir(outside);
   await writeFile(join(outside, 'notes.md'), 'Fremde Datei');
   await rm(directory, { recursive: true, force: true });

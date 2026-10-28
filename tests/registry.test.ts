@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, symlink, utimes, writeFile } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { buildApp } from './helpers/app';
 import { loadConfig } from '../src/server/config';
 import { containedPath } from '../src/server/files';
 import { Registry, lectureId, naturalCompare } from '../src/server/registry';

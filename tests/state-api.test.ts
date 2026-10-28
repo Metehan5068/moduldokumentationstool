@@ -1,9 +1,9 @@
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../src/server/app';
+import { buildApp } from './helpers/app';
 import { loadConfig } from '../src/server/config';
 import { lectureId } from '../src/server/registry';
 import { noteHash } from '../src/server/notes-store';
@@ -125,6 +125,7 @@ it('behandelt kaputtes state.json als flüchtige Daten und lässt Notizen weiter
 it('blockiert State- und Metadaten-Schreiben durch Junctions außerhalb von notes', async () => {
   const directory = await setup();
   const outside = join(root, 'outside'); await mkdir(outside);
+  await vi.waitFor(async () => expect(JSON.parse(await readFile(join(directory, 'meta.json'), 'utf8')).sourceTextVersion).toBeDefined(), { timeout: 5000 });
   await writeFile(join(outside, 'state.json'), 'Fremde Datei');
   await rm(directory, { recursive: true, force: true }); await symlink(outside, directory, 'junction');
   expect((await put(state())).statusCode).toBe(500);

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, expect, it, vi } from 'vitest';
-import { buildApp } from '../src/server/app';
+import { buildApp } from './helpers/app';
 import { loadConfig } from '../src/server/config';
 import { lectureId } from '../src/server/registry';
 import { noteHash } from '../src/server/notes-store';

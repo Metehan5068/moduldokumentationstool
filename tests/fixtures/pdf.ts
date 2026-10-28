@@ -1,4 +1,5 @@
 /** Kleine, selbst erzeugte PDFs; keine Vorlesungsdaten oder Binärdateien im Repo. */
+import { createHash } from 'node:crypto';
 export function testPdf(pageCount: number): Buffer {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -77,4 +78,31 @@ export function boilerplatePdf(): Buffer {
     ...(index < 9 ? [{ text: `Kapitel ${index + 1}`, x: 30, y: 305, size: 12 }, { text: `Thema ${index + 1}`, x: 30, y: 260, size: 28 }] : []),
     { text: `Inhalt ${index + 1}`, x: 30, y: 80, size: 16 },
   ]));
+}
+
+/** Selbst erzeugte, tatsächlich entschlüsselbare Standard-Security-PDF (R2, Benutzerpasswort geheim). */
+export function passwordPdf(): Buffer {
+  const padding = Buffer.from('28bf4e5e4e758a4164004e56fffa01082e2e00b6d0683e802f0ca9fe6453697a', 'hex');
+  const padded = (password: string) => Buffer.concat([Buffer.from(password, 'latin1'), padding]).subarray(0, 32);
+  const rc4 = (key: Buffer, data: Buffer) => {
+    const s = Array.from({ length: 256 }, (_, index) => index); let j = 0;
+    for (let i = 0; i < 256; i++) { j = (j + s[i]! + key[i % key.length]!) % 256; [s[i], s[j]] = [s[j]!, s[i]!]; }
+    const output = Buffer.alloc(data.length); let i = 0; j = 0;
+    for (let n = 0; n < data.length; n++) { i = (i + 1) % 256; j = (j + s[i]!) % 256; [s[i], s[j]] = [s[j]!, s[i]!]; output[n] = data[n]! ^ s[(s[i]! + s[j]!) % 256]!; }
+    return output;
+  };
+  const md5 = (data: Buffer) => createHash('md5').update(data).digest();
+  const documentId = md5(Buffer.from('self-generated-protected-fixture'));
+  const owner = rc4(md5(padded('owner')).subarray(0, 5), padded('geheim'));
+  const permissions = Buffer.alloc(4); permissions.writeInt32LE(-4);
+  const key = md5(Buffer.concat([padded('geheim'), owner, permissions, documentId])).subarray(0, 5);
+  const user = rc4(key, padding);
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << >> >>',
+    `<< /Filter /Standard /V 1 /R 2 /Length 40 /O <${owner.toString('hex')}> /U <${user.toString('hex')}> /P -4 >>`];
+  let pdf = '%PDF-1.4\n'; const offsets = [0];
+  for (const [index, object] of objects.entries()) { offsets.push(Buffer.byteLength(pdf)); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; }
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}`;
+  return Buffer.from(`${pdf}trailer\n<< /Size ${offsets.length} /Root 1 0 R /Encrypt 4 0 R /ID [<${documentId.toString('hex')}> <${documentId.toString('hex')}>] >>\nstartxref\n${xref}\n%%EOF\n`);
 }

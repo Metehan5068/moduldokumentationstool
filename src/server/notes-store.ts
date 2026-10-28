@@ -15,6 +15,7 @@ export const noteHash = (text: string): string => createHash('sha256').update(no
 export class NoteConflictError extends Error {
   constructor(readonly currentText: string) { super('Notiz wurde außerhalb dieser Ansicht geändert.'); }
 }
+export class DetachedNoteMissing extends Error {}
 
 export class NotesStore {
   constructor(private readonly config: AppConfig, private readonly writes = new WriteQueue(), private readonly logger?: Pick<FastifyBaseLogger, 'warn'>) {}
@@ -37,10 +38,11 @@ export class NotesStore {
     const document = await this.readDocument(lecture);
     return Object.fromEntries(Object.entries(document.notes).map(([page, text]) => [page, { text, hash: noteHash(text) }]));
   }
-  write(lecture: Lecture, page: number, text: string, baseHash: string): Promise<NoteValue> {
+  write(lecture: Lecture, page: number, text: string, baseHash: string, detached = false): Promise<NoteValue> {
     const id = lecture.summary.id;
     return this.writes.run(id, async () => {
       const document = await this.readDocument(lecture); // Innerhalb der Queue immer frisch lesen.
+      if (detached && (page <= (lecture.summary.pageCount ?? 0) || !Object.hasOwn(document.notes, page))) throw new DetachedNoteMissing('Notiz ohne Folie nicht vorhanden.');
       const current = document.notes[page] ?? '';
       if (noteHash(current) !== baseHash) throw new NoteConflictError(current);
       const normalized = normalizeNote(text);

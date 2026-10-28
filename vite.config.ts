@@ -35,6 +35,17 @@ export default defineConfig({
   build: { outDir: '../../dist/web', emptyOutDir: true },
   server: {
     host: '127.0.0.1', port: 5173, strictPort: true,
-    proxy: { '/api': 'http://127.0.0.1:3000' },
+    proxy: { '/api': {
+      target: 'http://127.0.0.1:3000', changeOrigin: true,
+      configure(proxy) {
+        proxy.on('proxyReq', (proxyRequest, request) => {
+          const origin = request.headers.origin;
+          // Nur der eigene lokale Vite-Ursprung darf zum Backend-Ursprung umgeschrieben werden.
+          if (origin === `http://${request.headers.host}` && ['http://127.0.0.1:5173', 'http://localhost:5173'].includes(origin)) {
+            proxyRequest.setHeader('Origin', 'http://127.0.0.1:3000');
+          }
+        });
+      },
+    } },
   },
 });

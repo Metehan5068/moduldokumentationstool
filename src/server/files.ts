@@ -44,16 +44,19 @@ export async function writeAtomic(root: string, target: string, text: string): P
     } finally {
       await file.close();
     }
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await rename(temporary, target);
-        break;
-      } catch (error) {
-        if (attempt >= 4 || !['EPERM', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
-        await setTimeout(25 * (attempt + 1));
-      }
-    }
+    await renameWithRetry(temporary, target);
   } finally {
     await rm(temporary, { force: true });
+  }
+}
+export async function renameWithRetry(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      break;
+    } catch (error) {
+      if (attempt >= 4 || !['EPERM', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+      await setTimeout(25 * (attempt + 1));
+    }
   }
 }

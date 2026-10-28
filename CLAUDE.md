@@ -8,7 +8,7 @@ Die vollständige Spezifikation steht in `ENTWICKLUNGSPLAN.md` im Repo-Root. Die
 (nicht auf GitHub) und taucht deshalb evtl. nicht in Suchergebnissen auf – **direkt per Pfad lesen**. Vor jeder Phase den passenden Abschnitt lesen
 und am Ende die Abnahmekriterien der Phase prüfen.
 
-Stand: **Phase 5 (KI-Lesbarkeit) erledigt.** Nächste: Phase 6 (Robustheit).
+Stand: **Phase 6 (Robustheit) erledigt.** Die Implementierungsphasen 0–6 sind umgesetzt.
 
 ## Struktur
 

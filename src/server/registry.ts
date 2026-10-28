@@ -18,6 +18,7 @@ export interface Metadata {
   sourcePdf: string;
   sourceSha256: string;
   acceptedSha256: string;
+  acceptedPageCount?: number;
   pageCount: number;
   pagesWithoutText: number[];
   completed: boolean;
@@ -41,6 +42,7 @@ export async function cachedMeta(path: string): Promise<Metadata | undefined> {
   try {
     const meta = JSON.parse(await readFile(path, 'utf8')) as Metadata;
     if (meta && meta.schemaVersion === 1 && /^[a-f0-9]{64}$/.test(meta.sourceSha256)
+      && typeof meta.module === 'string' && typeof meta.lecture === 'string' && typeof meta.sourcePdf === 'string'
       && typeof meta.acceptedSha256 === 'string' && typeof meta.completed === 'boolean'
       && Number.isInteger(meta.pageCount) && meta.pageCount > 0) return meta;
   } catch (error) {
@@ -56,11 +58,12 @@ export class Registry {
 
   get(id: string) { return this.lectures.get(id); }
   all() { return [...this.lectures.values()]; }
+  exclusive<T>(job: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(job); this.queue = result.catch(() => undefined); return result;
+  }
 
   scan(): Promise<OverviewResponse> {
-    const scan = this.queue.then(() => this.scanFiles());
-    this.queue = scan.catch(() => undefined);
-    return scan;
+    return this.exclusive(() => this.scanFiles());
   }
 
   private async scanFiles(): Promise<OverviewResponse> {
@@ -103,6 +106,7 @@ export class Registry {
               ...previous,
               schemaVersion: 1, module: module.name, lecture: title, sourcePdf, sourceSha256,
               acceptedSha256: previous?.acceptedSha256 ?? sourceSha256,
+              acceptedPageCount: previous?.acceptedPageCount ?? (previous ? previous.sourceSha256 === previous.acceptedSha256 ? previous.pageCount : undefined : summary.pageCount),
               pageCount: summary.pageCount, pagesWithoutText: [], completed: previous?.completed ?? false,
               sourceSize: info.size, sourceMtimeMs: info.mtimeMs,
             };
@@ -112,6 +116,7 @@ export class Registry {
                 await writeJson(this.config.notesRoot, metaPath, {
                   ...meta, completed: current?.completed ?? meta.completed,
                   acceptedSha256: current?.acceptedSha256 ?? meta.acceptedSha256,
+                  acceptedPageCount: current?.acceptedPageCount ?? meta.acceptedPageCount,
                   sourceTextSha256: current?.sourceTextSha256 ?? meta.sourceTextSha256,
                   sourceTextVersion: current?.sourceTextVersion ?? meta.sourceTextVersion,
                   sourcePageTitles: current?.sourcePageTitles ?? meta.sourcePageTitles,

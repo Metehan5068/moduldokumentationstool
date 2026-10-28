@@ -10,6 +10,7 @@ import type { StateStore } from './state-store.js';
 import { containedPath, safePath, writeAtomic, writeJson } from './files.js';
 import type { WriteQueue } from './write-queue.js';
 import { extractPdf, sourceMarkdown, SOURCE_TEXT_VERSION } from './pdf-text.js';
+import type { OrphanSummary } from '../shared/api.js';
 
 type Lecture = NonNullable<ReturnType<Registry['get']>>;
 const guide = `# Studiennotizen – Hinweise für KI-Agenten
@@ -45,7 +46,7 @@ export class KnowledgeService {
   private closing = false;
   constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error' | 'warn'>,
     private readonly writes: WriteQueue, private readonly notes: NotesStore, private readonly states: StateStore,
-    private readonly extract: typeof extractPdf = extractPdf) {}
+    private readonly extract: typeof extractPdf = extractPdf, private readonly getOrphans?: () => Promise<OrphanSummary[]>) {}
 
   afterScan(lectures: Lecture[]) {
     this.snapshot = lectures;
@@ -138,6 +139,14 @@ export class KnowledgeService {
       lines.push(`| ${cell(lecture.summary.title)} | ${lecture.summary.pageCount ?? 'Fehler beim Einlesen'} | ${notes ? Object.values(notes).filter((note) => note.text.length).length : 'Notizdatei prüfen'} | ${progress} | ${updated ? updated.slice(0, 10) : '–'} | [${cell(directory)}](${link(directory)}) · [PDF](${link(pdf)}) |`);
     }
     if (!lectures.length) lines.push('Noch keine Vorlesungs-PDFs gefunden.');
+    const orphans = await this.getOrphans?.() ?? [];
+    if (orphans.length) {
+      lines.push('', '## Notizen ohne PDF', '| Vorlesung | Notizen | Dateien |', '|---|---|---|');
+      for (const orphan of orphans) {
+        const directory = `notes/${orphan.module}/${orphan.title}/`;
+        lines.push(`| ${cell(`${orphan.module}/${orphan.title}`)} | ${orphan.noteCount ?? 'Notizdatei prüfen'} | [${cell(directory)}](${link(directory)}) |`);
+      }
+    }
     return `${lines.join('\n')}\n`;
   }
   private flushIndex(): Promise<void> {

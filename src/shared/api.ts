@@ -14,11 +14,14 @@ export interface LectureSummary {
   pageCount: number | null;
   error?: string;
   progress?: { completed: boolean; maxPageVisited: number; lastPage: number; noteCount: number | null; updatedAt?: string };
+  sourceChanged?: boolean;
+  previousPageCount?: number;
 }
 
 export interface OverviewResponse {
   modules: { name: string; lectures: LectureSummary[] }[];
   resume?: { id: string; title: string; module: string; pageCount: number; lastPage: number; updatedAt: string };
+  orphans?: OrphanSummary[];
 }
 
 export interface LectureResponse extends LectureSummary {
@@ -28,6 +31,12 @@ export interface LectureResponse extends LectureSummary {
   state: LectureState;
   completed: boolean;
   stateError?: string;
+  sourceSha256?: string;
+}
+export interface OrphanSummary {
+  id: string; module: string; title: string; noteCount: number | null;
+  candidates: { id: string; module: string; title: string }[];
+  error?: string;
 }
 
 export interface NoteValue { text: string; hash: string }

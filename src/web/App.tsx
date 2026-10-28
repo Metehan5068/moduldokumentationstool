@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { OverviewResponse } from '../shared/api';
+import { OrphanCard } from './OrphanCard';
 const LectureView = lazy(() => import('./LectureView').then((module) => ({ default: module.LectureView })));
 
 export function App() {
@@ -73,12 +74,19 @@ function Overview() {
                       {' · '}{lecture.progress.noteCount === null ? 'Notizdatei prüfen' : `${lecture.progress.noteCount} ${lecture.progress.noteCount === 1 ? 'Notiz' : 'Notizen'}`}
                     </span>}
                     {lecture.error && <span className="bad">{lecture.error}</span>}
+                    {lecture.sourceChanged && <span className="source-badge">⚠ PDF geändert – Zuordnung prüfen</span>}
                   </li>
                 ))}
               </ul>
             )}
           </section>
         ))}
+        {overview?.orphans?.length && <section className="module" aria-label="Notizen ohne PDF">
+          <h2>Notizen ohne PDF</h2><ul className="lectures">
+            {overview.orphans.map((orphan) => <OrphanCard key={orphan.id} orphan={orphan}
+              lectures={overview.modules.flatMap((module) => module.lectures.map((lecture) => ({ ...lecture, module: module.name })))} onLinked={() => { void load(); }} />)}
+          </ul>
+        </section>}
       </div>
       <p className="hint">Neue PDFs im Datenordner? Mit „Neu einlesen“ aktualisierst du die Übersicht.</p>
     </main>

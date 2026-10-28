@@ -7,19 +7,25 @@ import type { HealthResponse, OverviewResponse } from '../shared/api.js';
 import type { AppConfig } from './config.js';
 import { Registry } from './registry.js';
 import { safePath } from './files.js';
-import { NoteConflictError, noteHash, NotesParseError, NotesStore } from './notes-store.js';
+import { DetachedNoteMissing, NoteConflictError, noteHash, NotesParseError, NotesStore } from './notes-store.js';
 import { StateStore } from './state-store.js';
 import { WriteQueue } from './write-queue.js';
 import type { LectureState } from '../shared/state.js';
 import { KnowledgeService } from './knowledge.js';
+import { localRequestGuard } from './local-requests.js';
+import { SourceStatus, ChangedAgainError } from './source-status.js';
+import { OrphanService, RelinkError } from './orphans.js';
 
 export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { coerceTypes: false, removeAdditional: false } } });
+  localRequestGuard(app, config);
   const writes = new WriteQueue();
   const registry = new Registry(config, app.log, writes);
   const notes = new NotesStore(config, writes, app.log);
   const states = new StateStore(config, app.log, writes);
-  const knowledge = new KnowledgeService(config, app.log, writes, notes, states);
+  const sources = new SourceStatus(config, writes);
+  const orphans = new OrphanService(config, registry, writes, app.log);
+  const knowledge = new KnowledgeService(config, app.log, writes, notes, states, undefined, () => orphans.list());
   app.addHook('onClose', () => knowledge.close());
   async function scanRegistry() {
     const result = await registry.scan();
@@ -38,10 +44,12 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
   }
 
   app.get<{ Params: { id: string } }>('/api/lectures/:id', async (request, reply) => {
+    await scanRegistry();
     const lecture = await findLecture(request.params.id);
     if (!lecture) return reply.code(404).send({ error: 'not_found' });
     const [bookmark, completed] = await Promise.all([states.read(lecture), states.completed(lecture)]);
-    const detail = { ...lecture.summary, module: lecture.module, state: bookmark.state, completed, ...(bookmark.error ? { stateError: bookmark.error } : {}) };
+    const source = await sources.read(lecture).catch((err: unknown) => { request.log.warn({ err }, 'Quellstatus konnte nicht gelesen werden'); return { sourceChanged: false }; });
+    const detail = { ...lecture.summary, ...source, module: lecture.module, state: bookmark.state, completed, ...(bookmark.error ? { stateError: bookmark.error } : {}) };
     try {
       return { ...detail, notes: await notes.read(lecture) };
     } catch (err) {
@@ -50,6 +58,29 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
         message: err instanceof NotesParseError ? err.message : 'Notizen konnten nicht gelesen werden. Zugriffsrechte prüfen.',
         ...(err instanceof NotesParseError ? { line: err.line } : {}),
       } };
+    }
+  });
+
+  app.post<{ Params: { id: string }; Body: { sourceSha256: string } }>('/api/lectures/:id/accept-source', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['sourceSha256'], properties: { sourceSha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } } } },
+  }, async (request, reply) => {
+    const lecture = await findLecture(request.params.id); if (!lecture) return reply.code(404).send({ error: 'not_found' });
+    try { const result = await sources.accept(lecture, request.body.sourceSha256); knowledge.requestIndex(); return result; }
+    catch (err) {
+      if (err instanceof ChangedAgainError) return reply.code(409).send({ error: 'source_changed_again', message: err.message });
+      request.log.error({ err }, 'Quellenbestätigung fehlgeschlagen'); return reply.code(500).send({ error: 'save_failed' });
+    }
+  });
+
+  app.post<{ Params: { id: string }; Body: { lectureId: string } }>('/api/orphans/:id/relink', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['lectureId'], properties: { lectureId: { type: 'string', pattern: '^[a-f0-9]{16}$' } } } },
+  }, async (request, reply) => {
+    if (!/^[a-f0-9]{16}$/.test(request.params.id)) return reply.code(404).send({ error: 'not_found' });
+    await scanRegistry();
+    try { await orphans.link(request.params.id, request.body.lectureId); await scanRegistry(); return { lectureId: request.body.lectureId }; }
+    catch (err) {
+      if (err instanceof RelinkError) return reply.code(err.status).send({ error: 'relink_failed', message: err.message });
+      request.log.error({ err }, 'Notizen konnten nicht verknüpft werden'); return reply.code(500).send({ error: 'relink_failed', message: 'Verknüpfung fehlgeschlagen. Originaldateien und Sicherungen bleiben erhalten.' });
     }
   });
 
@@ -82,7 +113,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     catch (err) { request.log.error({ err, lectureId: request.params.id }, 'Erledigt-Status konnte nicht gespeichert werden'); return reply.code(500).send({ error: 'save_failed' }); }
   });
 
-  app.put<{ Params: { id: string; page: string }; Body: { text: string; baseHash: string } }>('/api/lectures/:id/notes/:page', {
+  for (const notePath of ['/api/lectures/:id/notes/:page', '/api/lectures/:id/detached-notes/:page']) app.put<{ Params: { id: string; page: string }; Body: { text: string; baseHash: string } }>(notePath, {
     schema: { body: {
       type: 'object', required: ['text', 'baseHash'], additionalProperties: false,
       properties: { text: { type: 'string', maxLength: 500000 }, baseHash: { type: 'string', pattern: '^[a-f0-9]{64}$' } },
@@ -92,18 +123,20 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     const lecture = await findLecture(request.params.id);
     if (!lecture) return reply.code(404).send({ error: 'not_found' });
     const page = Number(request.params.page);
-    if (!/^[1-9]\d*$/.test(request.params.page) || !Number.isSafeInteger(page) || page > (lecture.summary.pageCount ?? 0)) {
+    const detached = request.url.split('?')[0]!.includes('/detached-notes/');
+    if (!/^[1-9]\d*$/.test(request.params.page) || !Number.isSafeInteger(page) || (!detached && page > (lecture.summary.pageCount ?? 0))) {
       return reply.code(400).send({ error: 'invalid_page' });
     }
     try {
-      const saved = await notes.write(lecture, page, request.body.text, request.body.baseHash);
-      if (saved.hash !== request.body.baseHash) {
+      const saved = await notes.write(lecture, page, request.body.text, request.body.baseHash, detached);
+      if (!detached && saved.hash !== request.body.baseHash) {
         try { await states.markEdited(lecture, page); }
         catch (err) { request.log.warn({ err, lectureId: request.params.id, page }, 'Fortschritt der bearbeiteten Notiz konnte nicht gespeichert werden'); }
       }
       knowledge.requestIndex();
       return { hash: saved.hash };
     } catch (err) {
+      if (err instanceof DetachedNoteMissing) return reply.code(404).send({ error: 'not_found' });
       if (err instanceof NoteConflictError) return reply.code(409).send({ currentText: err.currentText, currentHash: noteHash(err.currentText) });
       request.log.error({ err, lectureId: request.params.id, page }, 'Notiz konnte nicht gespeichert werden');
       if (err instanceof NotesParseError) return reply.code(422).send({ error: 'notes_invalid', message: err.message, line: err.line });
@@ -134,6 +167,9 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
       const [bookmark, completed, pageNotes] = await Promise.all([
         states.read(lecture), states.completed(lecture), notes.read(lecture).catch(() => undefined),
       ]);
+      const source = await sources.read(lecture).catch(() => ({ sourceChanged: false }));
+      summary.sourceChanged = source.sourceChanged;
+      if ('previousPageCount' in source) summary.previousPageCount = source.previousPageCount;
       summary.progress = {
         completed, maxPageVisited: bookmark.state.maxPageVisited, lastPage: bookmark.state.lastPage,
         noteCount: pageNotes ? Object.values(pageNotes).filter((note) => note.text.length > 0).length : null,
@@ -143,6 +179,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
         result.resume = { id: summary.id, title: summary.title, module: module.name, pageCount: summary.pageCount, lastPage: bookmark.state.lastPage, updatedAt: bookmark.state.updatedAt };
       }
     }
+    const missing = await orphans.list(); if (missing.length) result.orphans = missing;
     return result;
   }
   app.get('/api/overview', overview);
