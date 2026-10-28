@@ -8,6 +8,7 @@ import { newNotes, normalizeNote, NotesParseError, parseNotes, serializeNotes, t
 import type { NoteValue } from '../shared/api.js';
 import { WriteQueue } from './write-queue.js';
 import type { FastifyBaseLogger } from 'fastify';
+import { SOURCE_TEXT_VERSION } from './pdf-text.js';
 
 type Lecture = NonNullable<ReturnType<Registry['get']>>;
 export const noteHash = (text: string): string => createHash('sha256').update(normalizeNote(text)).digest('hex');
@@ -45,18 +46,21 @@ export class NotesStore {
       const normalized = normalizeNote(text);
       document.notes[page] = normalized;
       const titles = await this.titles(lecture);
-      if (typeof titles[page] === 'string' && titles[page]) document.titles[page] = titles[page]!;
+      if (titles && page <= (lecture.summary.pageCount ?? 0)) {
+        if (typeof titles[page] === 'string' && titles[page]) document.titles[page] = titles[page]!;
+        else delete document.titles[page];
+      }
       await writeAtomic(this.config.notesRoot, await this.path(lecture), serializeNotes(document));
       return { text: normalized, hash: noteHash(normalized) };
     });
   }
-  private async titles(lecture: Lecture): Promise<Record<number, string>> {
+  private async titles(lecture: Lecture): Promise<Record<number, string> | undefined> {
     try {
       const meta = await cachedMeta(await this.path(lecture, 'meta.json'));
-      if (!meta || meta.sourceTextSha256 !== meta.sourceSha256) return {};
+      if (!meta || meta.sourceTextSha256 !== meta.sourceSha256 || meta.sourceTextVersion !== SOURCE_TEXT_VERSION) return undefined;
       const header = (await readFile(await this.path(lecture, 'source.md'), 'utf8')).split('\n').slice(0, 8);
-      return header.includes(`sha256: ${meta.sourceSha256}`) ? meta.sourcePageTitles ?? {} : {};
-    } catch (err) { this.logger?.warn({ err, lectureId: lecture.summary.id }, 'Folientitel konnten nicht gelesen werden'); return {}; }
+      return header.includes(`sha256: ${meta.sourceSha256}`) ? meta.sourcePageTitles ?? {} : undefined;
+    } catch (err) { this.logger?.warn({ err, lectureId: lecture.summary.id }, 'Folientitel konnten nicht gelesen werden'); return undefined; }
   }
   retitle(lecture: Lecture): Promise<void> {
     return this.writes.run(lecture.summary.id, async () => {
@@ -66,10 +70,14 @@ export class NotesStore {
       catch (err) { if ((err as NodeJS.ErrnoException).code === 'ENOENT') return; throw err; }
       const document = parseNotes(raw);
       const titles = await this.titles(lecture);
+      if (!titles) return;
       let changed = false;
       for (const page of Object.keys(document.notes).map(Number)) {
-        if (typeof titles[page] === 'string' && titles[page] && document.titles[page] !== titles[page]) {
-          document.titles[page] = titles[page]!; changed = true;
+        if (page > (lecture.summary.pageCount ?? 0)) continue;
+        const desired = typeof titles[page] === 'string' ? titles[page]! : '';
+        if ((document.titles[page] ?? '') !== desired) {
+          if (desired) document.titles[page] = desired; else delete document.titles[page];
+          changed = true;
         }
       }
       if (changed) await writeAtomic(this.config.notesRoot, path, serializeNotes(document));

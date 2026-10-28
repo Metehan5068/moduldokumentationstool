@@ -26,6 +26,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     knowledge.afterScan(registry.all());
     return result;
   }
+  app.addHook('onReady', async () => { await scanRegistry(); });
 
   // Nur explizite ID-Routen dürfen PDFs ausliefern; kein öffentlicher Datenordner.
   await app.register(fastifyStatic, { root: config.moduleRoot, serve: false });

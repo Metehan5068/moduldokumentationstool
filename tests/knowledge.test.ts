@@ -10,7 +10,7 @@ import { lectureId } from '../src/server/registry';
 import { noteHash } from '../src/server/notes-store';
 import { newNotes, parseNotes, serializeNotes } from '../src/shared/notes';
 import * as text from '../src/server/pdf-text';
-import { textPdf } from './fixtures/pdf';
+import { textPdf, boilerplatePdf, fixtureFooter } from './fixtures/pdf';
 let root: string;
 let app: FastifyInstance;
 let externalRoot: string | undefined;
@@ -126,7 +126,11 @@ it('aktualisiert neue Notizen mit Folientitel und den Index nach Speichern, Stat
 });
 
 it('lässt kaputte notes.md unverändert und fährt nach Extraktionsfehlern mit der nächsten PDF fort', async () => {
-  vi.spyOn(text, 'extractPdf').mockRejectedValueOnce(new Error('Simulierter Extraktionsfehler'));
+  const actual = text.extractPdf;
+  vi.spyOn(text, 'extractPdf').mockImplementation(async (data) => {
+    if (sha(Buffer.from(data)) === sha(textPdf([['A']]))) throw new Error('Simulierter Extraktionsfehler');
+    return actual(data);
+  });
   await setup({ 'A.pdf': [['A']], 'B.pdf': [['B']], 'C.pdf': [['C']] });
   await mkdir(dir('B'), { recursive: true });
   const broken = '<!-- lecture-note:page=1 -->\n## Folie 1\n\nEndmarker fehlt';
@@ -136,6 +140,26 @@ it('lässt kaputte notes.md unverändert und fährt nach Extraktionsfehlern mit 
   expect(await read(join(dir('B'), 'notes.md'))).toBe(broken);
   expect(await read(join(dir('C'), 'source.md'))).toContain('## Seite 1\nC');
   expect(await read(join(root, 'INDEX.md'))).toContain('Notizdatei prüfen');
+});
+
+it('migriert einen alten Extraktor-Cache allein beim Serverstart und entfernt falsche Titel ohne Textverlust', async () => {
+  await setup({ 'Test.pdf': [['Platzhalter']] });
+  await writeFile(join(root, 'module', 'ids', 'Test.pdf'), boilerplatePdf());
+  await app.ready(); await app.close();
+  const metaPath = join(dir('Test'), 'meta.json');
+  const meta = JSON.parse(await read(metaPath));
+  await writeFile(metaPath, JSON.stringify({ ...meta, sourceTextVersion: 1, sourcePageTitles: { 1: fixtureFooter, 10: fixtureFooter } }));
+  await writeFile(join(dir('Test'), 'source.md'), `---\nsha256: ${meta.sourceSha256}\n---\n${fixtureFooter}\n${fixtureFooter}\n`);
+  const notes = newNotes('module/ids/Test.pdf', 'Test', 10);
+  notes.notes[1] = `Meine Frage\n${fixtureFooter}`; notes.notes[10] = 'Keine Titelzeile vorhanden';
+  notes.titles[1] = fixtureFooter; notes.titles[10] = fixtureFooter;
+  await writeFile(join(dir('Test'), 'notes.md'), serializeNotes(notes));
+  app = await buildApp(loadConfig({ DATA_ROOT: root })); await app.ready(); await app.close();
+  const updated = JSON.parse(await read(metaPath)); expect(updated.sourceTextVersion).toBe(text.SOURCE_TEXT_VERSION);
+  expect(updated.sourceSha256).toBe(meta.sourceSha256);
+  const source = await read(join(dir('Test'), 'source.md')); expect(source.split(fixtureFooter)).toHaveLength(2);
+  const result = parseNotes(await read(join(dir('Test'), 'notes.md')));
+  expect(result.notes).toEqual(notes.notes); expect(result.titles[1]).toBe('Thema 1'); expect(result.titles[10]).toBe('');
 });
 
 it('folgt keinen Junctions außerhalb von notes und überschreibt keine externe INDEX-Datei', async () => {

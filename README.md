@@ -178,11 +178,19 @@ angelegt. Wird die PDF während der Extraktion ersetzt, verwirft die App den
 veralteten Stand. Fehler werden mit Ursache geloggt, weitere PDFs bleiben in der
 Queue. Worker, Schriften und Decoder kommen ausschließlich aus lokalen Dateien.
 
-Die erste Textzeile jeder Seite wird als Folientitel in den generierten
+Die Zeile mit der größten Schrifthöhe in der oberen Seitenhälfte wird als Folientitel in den generierten
 `## Folie N · Titel`-Überschriften verwendet. Bestehende Notizen erhalten die Titel
 nach der Extraktion; neue bzw. bearbeitete Notizen beim Speichern. Der Nutzertext
 bleibt erhalten, auch bei parallelem Schreiben. Kaputte Notizdateien werden
 unverändert gelassen und müssen vor einer Aktualisierung repariert werden.
+
+Identische Zeilen auf mindestens 30 % der Seiten (mindestens zwei verschiedenen
+Seiten) gelten als Boilerplate. Sie stehen nur einmal im Kopf von `source.md`
+unter „Wiederkehrende Kopf-/Fußzeilen“ und werden nie als Titel verwendet.
+Ohne Kandidaten in der oberen Hälfte bleibt die Folienüberschrift ohne Titel.
+`meta.json` enthält `sourceTextVersion`; ein veralteter oder unversionierter Cache
+wird beim nächsten Serverstart samt vorhandenen generierten Notiztiteln erneuert,
+auch wenn der PDF-Hash gleich bleibt. Nutzertext und eigene `CLAUDE.md` bleiben erhalten.
 
 Im Datenordner entstehen zusätzlich:
 

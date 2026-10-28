@@ -9,7 +9,7 @@ import type { NotesStore } from './notes-store.js';
 import type { StateStore } from './state-store.js';
 import { containedPath, safePath, writeAtomic, writeJson } from './files.js';
 import type { WriteQueue } from './write-queue.js';
-import { extractPdf, sourceMarkdown } from './pdf-text.js';
+import { extractPdf, sourceMarkdown, SOURCE_TEXT_VERSION } from './pdf-text.js';
 
 type Lecture = NonNullable<ReturnType<Registry['get']>>;
 const guide = `# Studiennotizen – Hinweise für KI-Agenten
@@ -80,7 +80,7 @@ export class KnowledgeService {
     if (!meta) return;
     const sourcePath = await this.notePath(lecture, 'source.md');
     let cached = false;
-    if (meta.sourceTextSha256 === meta.sourceSha256) {
+    if (meta.sourceTextSha256 === meta.sourceSha256 && meta.sourceTextVersion === SOURCE_TEXT_VERSION) {
       try { cached = (await readFile(sourcePath, 'utf8')).split('\n').slice(0, 8).includes(`sha256: ${meta.sourceSha256}`); }
       catch (err) { if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err; }
     }
@@ -89,20 +89,16 @@ export class KnowledgeService {
       const data = await readFile(lecture.pdfPath);
       const hash = createHash('sha256').update(data).digest('hex');
       if (hash !== meta.sourceSha256) return; // Wurde während des Scans ersetzt; nächster Scan nimmt die neue Quelle auf.
-      const pages = await this.extract(new Uint8Array(data));
-      const sourcePageTitles = Object.fromEntries(pages.flatMap((text, index) => {
-        const title = text.split('\n').find((line) => line.trim())?.trim();
-        return title ? [[index + 1, title]] : [];
-      }));
+      const extracted = await this.extract(new Uint8Array(data));
       const committed = await this.writes.run(lecture.summary.id, async () => {
         await safePath(this.config.dataRoot, this.config.moduleRoot);
         await safePath(this.config.moduleRoot, lecture.pdfPath);
         const current = await cachedMeta(await this.notePath(lecture, 'meta.json'));
         const info = await stat(lecture.pdfPath);
         if (!current || current.sourceSha256 !== hash || info.size !== meta.sourceSize || info.mtimeMs !== meta.sourceMtimeMs) return false;
-        await writeAtomic(this.config.notesRoot, await this.notePath(lecture, 'source.md'), sourceMarkdown(current.sourcePdf, lecture.summary.title, hash, pages));
-        await writeJson(this.config.notesRoot, metaPath, { ...current, sourceTextSha256: hash, sourcePageTitles,
-          pagesWithoutText: pages.flatMap((text, index) => text.trim() ? [] : [index + 1]) });
+        await writeAtomic(this.config.notesRoot, await this.notePath(lecture, 'source.md'), sourceMarkdown(current.sourcePdf, lecture.summary.title, hash, extracted.pages, undefined, extracted.boilerplate));
+        await writeJson(this.config.notesRoot, metaPath, { ...current, sourceTextSha256: hash, sourceTextVersion: SOURCE_TEXT_VERSION,
+          sourcePageTitles: extracted.titles, pagesWithoutText: extracted.pagesWithoutText });
         return true;
       });
       if (!committed) return;

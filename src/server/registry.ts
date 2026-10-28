@@ -24,6 +24,7 @@ export interface Metadata {
   sourceSize: number;
   sourceMtimeMs: number;
   sourceTextSha256?: string;
+  sourceTextVersion?: number;
   sourcePageTitles?: Record<number, string>;
 }
 
@@ -112,6 +113,7 @@ export class Registry {
                   ...meta, completed: current?.completed ?? meta.completed,
                   acceptedSha256: current?.acceptedSha256 ?? meta.acceptedSha256,
                   sourceTextSha256: current?.sourceTextSha256 ?? meta.sourceTextSha256,
+                  sourceTextVersion: current?.sourceTextVersion ?? meta.sourceTextVersion,
                   sourcePageTitles: current?.sourcePageTitles ?? meta.sourcePageTitles,
                   pagesWithoutText: current?.sourceTextSha256 === meta.sourceSha256 ? current.pagesWithoutText : meta.pagesWithoutText,
                 });
