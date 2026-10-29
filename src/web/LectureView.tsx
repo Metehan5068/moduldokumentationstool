@@ -88,16 +88,16 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
         if (detail.pageCount === null) { setError(detail.error ?? 'PDF konnte nicht eingelesen werden.'); return; }
         task = getDocument({ url: `/api/lectures/${id}/pdf`, cMapUrl: '/pdf-assets/cmaps/', cMapPacked: true,
           standardFontDataUrl: '/pdf-assets/standard_fonts/', wasmUrl: '/pdf-assets/wasm/', iccUrl: '/pdf-assets/iccs/', useSystemFonts: false,
-          disableAutoFetch: true, disableStream: true });
+          // Lokal ist eine einzige Anfrage schneller als Dutzende Range-Requests; das Layout braucht ohnehin alle Seitengrößen.
+          disableRange: true });
         const pdf = await task.promise;
-        const ratios: number[] = [];
-        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-          if (disposed) return;
-          const page = await pdf.getPage(pageNumber);
+        // Parallel statt nacheinander: pdf.js bündelt dann die Range-Requests für alle Seitengrößen.
+        const ratios = await Promise.all(Array.from({ length: pdf.numPages }, async (_, index) => {
+          const page = await pdf.getPage(index + 1);
           const viewport = page.getViewport({ scale: 1 });
-          ratios.push(viewport.width / viewport.height);
           page.cleanup();
-        }
+          return viewport.width / viewport.height;
+        }));
         if (!disposed) { setCompleted(detail.completed); setSourceChanged(Boolean(detail.sourceChanged)); setLoaded({ detail, pdf, ratios }); }
       } catch (err) {
         if (!disposed) {

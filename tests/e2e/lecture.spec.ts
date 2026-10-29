@@ -569,7 +569,7 @@ test('Zoom neben Notizen: stabile Zeile, scharfer Ausschnitt, unabhängige Folie
   await expect(page.getByRole('dialog', { name: 'Folie 1 · Detailansicht' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(row.getByLabel('Vergrößerung Folie 1', { exact: true })).toHaveText('200 %');
-  await row.getByRole('button', { name: 'Folie 1 einpassen', exact: true }).click();
+  for (let i = 0; i < 4; i++) await row.getByRole('button', { name: 'Folie 1 herauszoomen', exact: true }).click();
   await expect(row.getByLabel('Vergrößerung Folie 1', { exact: true })).toHaveText('100 %');
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop + element.scrollLeft)).toBe(0);
   expect((await row.boundingBox())!.height).toBe(initialRow!.height);
@@ -579,11 +579,11 @@ test('Zoom neben Notizen: stabile Zeile, scharfer Ausschnitt, unabhängige Folie
   await expect.poll(() => page.locator('.lecture-scroll').evaluate((element) => element.scrollTop)).toBeGreaterThan(beforeWheel + 100);
 });
 
-test('Folien-Detailansicht: scharfer Zoom, Verschieben, Einpassen und Rückkehr ohne Positionsverlust', async ({ page }) => {
+test('Folien-Detailansicht: scharfer Zoom, Verschieben, Zurückzoomen und Rückkehr ohne Positionsverlust', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await openLecture(page);
-  await jump(page, 10); // Hochformat prüft das Einpassen auch in der Höhe.
+  await jump(page, 10); // Hochformat prüft das Einpassen bei 100 % auch in der Höhe.
   const note = page.getByLabel('Notiz zu Folie 10', { exact: true });
   await note.fill('Notiz bleibt beim Zoomen erhalten');
   const opener = page.getByRole('button', { name: 'Folie 10 vergrößern', exact: true });
@@ -617,7 +617,7 @@ test('Folien-Detailansicht: scharfer Zoom, Verschieben, Einpassen und Rückkehr 
   await page.keyboard.press('Control+s');
   await expect(page.locator('.lecture-toolbar [role=status]')).toHaveText('Gespeichert');
   await page.setViewportSize({ width: 1100, height: 750 });
-  await dialog.getByRole('button', { name: 'Einpassen' }).click();
+  for (let i = 0; i < 4; i++) await dialog.getByRole('button', { name: 'Verkleinern', exact: true }).click();
   await expect(dialog.getByLabel('Vergrößerung')).toHaveText('100 %');
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(0);
   const resized = await canvas.boundingBox();

@@ -55,7 +55,6 @@ export function SlideZoom({ pdf, pageNumber, ratio, onClose }: {
       <button type="button" aria-label="Verkleinern" disabled={zoom <= 1} onClick={() => setZoom((value) => Math.max(1, value - 0.25))}>−</button>
       <output aria-label="Vergrößerung" aria-live="polite">{Math.round(zoom * 100)} %</output>
       <button type="button" aria-label="Vergrößern" disabled={zoom >= 4} onClick={() => setZoom((value) => Math.min(4, value + 0.25))}>+</button>
-      <button type="button" onClick={() => setZoom(1)}>Einpassen</button>
       <button type="button" onClick={onClose}>Schließen</button>
     </div>
     <p className="slide-zoom-hint" id="slide-zoom-help">100 % = ganze Folie · Vergrößerte Folie mit gedrückter Maustaste verschieben oder scrollen · Esc: schließen</p>

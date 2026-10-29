@@ -32,7 +32,6 @@ export function InlineSlide({ pdf, pageNumber, ratio, active, onExpand }: {
         <button type="button" aria-label={`Folie ${pageNumber} herauszoomen`} disabled={zoom <= 1} onClick={() => changeZoom(zoom - 0.25)}>−</button>
         <output aria-label={`Vergrößerung Folie ${pageNumber}`} aria-live="polite">{Math.round(zoom * 100)} %</output>
         <button type="button" aria-label={`Folie ${pageNumber} hineinzoomen`} disabled={zoom >= 4} onClick={() => changeZoom(zoom + 0.25)}>+</button>
-        <button type="button" aria-label={`Folie ${pageNumber} einpassen`} onClick={() => changeZoom(1)}>Einpassen</button>
         <button type="button" aria-label={`Folie ${pageNumber} vergrößern`} onClick={onExpand}>Vergrößern</button>
       </div>
     </figcaption>

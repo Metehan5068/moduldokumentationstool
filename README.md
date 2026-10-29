@@ -72,7 +72,7 @@ Spaltenverhältnis wird lokal im Browser gespeichert.
 Die +/−-Tasten an jeder Folie vergrößern ihren Inhalt direkt neben den Notizen
 von 100 bis 400 %. Der Folienrahmen und die Notizzeile behalten beim Zoomen ihre
 Größe. Ausschnitte lassen sich mit gedrückter Maustaste verschieben oder scrollen;
-„Einpassen“ zeigt wieder die ganze Folie. Der Zoom gilt je Folie und bleibt beim
+mit − geht es zurück bis 100 % (ganze Folie). Der Zoom gilt je Folie und bleibt beim
 Scrollen innerhalb der geöffneten Vorlesung erhalten. Bei 100 % scrollt das
 Mausrad weiterhin die Vorlesungsansicht. Die Bitmap ist je Folie auf etwa
 8 Megapixel begrenzt und wird weiterhin nur im sichtbaren Umfeld gerendert.
@@ -80,7 +80,7 @@ Mausrad weiterhin die Vorlesungsansicht. Die Bitmap ist je Folie auf etwa
 „Vergrößern“ an einer Folie öffnet zusätzlich eine große Detailansicht. Mit +/− lässt sich
 die Folie von 100 bis 400 % vergrößern; 100 % bedeutet die ganze Folie im Fenster.
 Vergrößerte Bereiche lassen sich mit gedrückter Maustaste verschieben oder über
-Scrollleisten, Mausrad und Pfeiltasten erkunden. „Einpassen“ setzt den Zoom zurück.
+Scrollleisten, Mausrad und Pfeiltasten erkunden.
 „Schließen“ oder `Esc` führt zur unveränderten Leseposition zurück. Die PDF wird
 bei Zoom und Fensteränderungen neu gerendert; die zusätzliche Bitmap ist auf
 etwa 16 Megapixel begrenzt.

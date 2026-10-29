@@ -43,6 +43,35 @@ const hangingIndent = ViewPlugin.fromClass(class {
   }
 }, { decorations: (plugin) => plugin.decorations });
 
+/**
+ * Ein CodeMirror-Editor kostet beim Aufbau einige Millisekunden; bei 130+ Folien blockierte das das Öffnen.
+ * Sichtbare Editoren entstehen sofort, alle übrigen in kurzen Zeitscheiben, zwischen denen Eingaben drankommen.
+ */
+const pending = new Map<Element, () => void>();
+let drainTimer = 0;
+let visibleObserver: IntersectionObserver | undefined;
+function schedule(element: Element, mount: () => void) {
+  pending.set(element, mount);
+  visibleObserver ??= new IntersectionObserver((entries) => {
+    for (const entry of entries) if (entry.isIntersecting) pending.get(entry.target)?.();
+  }, { rootMargin: '100% 0px' });
+  visibleObserver.observe(element);
+  if (!drainTimer) drainTimer = window.setTimeout(drain);
+}
+function unschedule(element: Element) {
+  pending.delete(element);
+  visibleObserver?.unobserve(element);
+}
+function drain() {
+  drainTimer = 0;
+  const end = performance.now() + 12;
+  for (const mount of pending.values()) {
+    mount();
+    if (performance.now() > end) break;
+  }
+  if (pending.size) drainTimer = window.setTimeout(drain);
+}
+
 export function NoteEditor({ id, label, value, readOnly, describedBy, editorRef, onChange, onFocus, onBlur, onKeyDown }: {
   id: string; label: string; value: string; readOnly: boolean; describedBy?: string;
   editorRef?: (handle: NoteEditorHandle | null) => void;
@@ -56,17 +85,41 @@ export function NoteEditor({ id, label, value, readOnly, describedBy, editorRef,
   const access = useRef(new Compartment());
   const undoHistory = useRef(new Compartment());
   const attributes = useRef(new Compartment());
-  const contentAttributes = () => EditorView.contentAttributes.of({ id, role: 'textbox', 'aria-label': label, 'aria-multiline': 'true', 'aria-readonly': String(readOnly), ...(describedBy ? { 'aria-describedby': describedBy } : {}) });
+  const props = useRef({ id, label, value, readOnly, describedBy });
+  props.current = { id, label, value, readOnly, describedBy };
+  const ensure = useRef<() => EditorView>(undefined);
+  const contentAttributes = () => {
+    const { id, label, readOnly, describedBy } = props.current;
+    return EditorView.contentAttributes.of({ id, role: 'textbox', 'aria-label': label, 'aria-multiline': 'true', 'aria-readonly': String(readOnly), ...(describedBy ? { 'aria-describedby': describedBy } : {}) });
+  };
 
   useLayoutEffect(() => {
-    let handle: NoteEditorHandle;
+    const element = holder.current!;
+    let view: EditorView | undefined;
     let composingKey = false;
     const guardComposition = (bindings: readonly KeyBinding[]) => bindings.map((binding) => ({
       ...binding,
       run: binding.run ? (editor: EditorView) => !composingKey && binding.run!(editor) : undefined,
       shift: binding.shift ? (editor: EditorView) => !composingKey && binding.shift!(editor) : undefined,
     }));
-    const view = new EditorView({ parent: holder.current!, state: EditorState.create({ doc: value, extensions: [
+    // Bis zum Aufbau liefert der Handle den Notiztext aus den Props; Fokus und Bearbeiten bauen den Editor sofort auf.
+    const handle: NoteEditorHandle = {
+      get element() { return view?.contentDOM ?? element; },
+      get value() { return view ? view.state.doc.toString() : props.current.value; },
+      get selectionStart() { return view?.state.selection.main.from ?? 0; },
+      get selectionEnd() { return view?.state.selection.main.to ?? 0; },
+      focus() { mount().focus(); },
+      setSelectionRange(start, end) { mount().dispatch({ selection: { anchor: start, head: end } }); },
+      contains(target) { return Boolean(view) && target instanceof Node && view!.contentDOM.contains(target); },
+      applyEdit(edit) {
+        mount().dispatch({ changes: { from: edit.start, to: edit.end, insert: edit.text }, selection: { anchor: edit.selectionStart, head: edit.selectionEnd }, annotations: [Transaction.userEvent.of('input.list'), isolateHistory.of('full')], scrollIntoView: true });
+      },
+    };
+    const mount = () => {
+      if (view) return view;
+      unschedule(element);
+      const { value, readOnly } = props.current;
+      const created: EditorView = view = new EditorView({ parent: element, state: EditorState.create({ doc: value, extensions: [
       EditorView.lineWrapping, EditorState.tabSize.of(4), undoHistory.current.of(history()), hangingIndent,
       access.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
       attributes.current.of(contentAttributes()), placeholder('Deine Notiz …'),
@@ -89,25 +142,17 @@ export function NoteEditor({ id, label, value, readOnly, describedBy, editorRef,
         if (update.docChanged && !update.transactions.every((transaction) => transaction.annotation(Transaction.addToHistory) === false)) {
           latest.current.onChange(update.state.doc.toString());
           // Programmatic list transactions also count as edits for progress tracking.
-          view.contentDOM.dispatchEvent(new Event('note-edit', { bubbles: true }));
+          update.view.contentDOM.dispatchEvent(new Event('note-edit', { bubbles: true }));
         }
       }),
-    ] }) });
-    handle = {
-      element: view.contentDOM,
-      get value() { return view.state.doc.toString(); },
-      get selectionStart() { return view.state.selection.main.from; },
-      get selectionEnd() { return view.state.selection.main.to; },
-      focus() { view.focus(); },
-      setSelectionRange(start, end) { view.dispatch({ selection: { anchor: start, head: end } }); },
-      contains(target) { return target instanceof Node && view.contentDOM.contains(target); },
-      applyEdit(edit) {
-        view.dispatch({ changes: { from: edit.start, to: edit.end, insert: edit.text }, selection: { anchor: edit.selectionStart, head: edit.selectionEnd }, annotations: [Transaction.userEvent.of('input.list'), isolateHistory.of('full')], scrollIntoView: true });
-      },
+      ] }) });
+      viewRef.current = created;
+      return created;
     };
-    viewRef.current = view;
+    ensure.current = mount;
+    schedule(element, mount);
     latest.current.editorRef?.(handle);
-    return () => { latest.current.editorRef?.(null); viewRef.current = null; view.destroy(); };
+    return () => { unschedule(element); latest.current.editorRef?.(null); viewRef.current = null; ensure.current = undefined; view?.destroy(); };
   }, []);
 
   useLayoutEffect(() => {
@@ -119,5 +164,8 @@ export function NoteEditor({ id, label, value, readOnly, describedBy, editorRef,
     view.dispatch({ changes, effects: [access.current.reconfigure([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]), attributes.current.reconfigure(contentAttributes()), ...(changes ? [undoHistory.current.reconfigure(history())] : [])], annotations: Transaction.addToHistory.of(false) });
   }, [value, readOnly, describedBy, id, label]);
 
-  return <div className="note-editor" ref={holder} />;
+  return <div className="note-editor" ref={holder} onMouseDown={(event) => {
+    if (viewRef.current || !ensure.current) return;
+    event.preventDefault(); ensure.current().focus();
+  }} />;
 }
