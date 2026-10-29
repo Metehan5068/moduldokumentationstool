@@ -2,10 +2,12 @@ import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } 
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { LectureResponse } from '../shared/api';
-import { PdfCanvas } from './PdfCanvas';
+import { InlineSlide } from './InlineSlide';
+import { SlideZoom } from './SlideZoom';
 import { NotesSession, statusText } from './notes-session';
 import { useLecturePosition } from './use-lecture-position';
 import { NoteField } from './NoteField';
+import type { NoteEditorHandle } from './NoteEditor';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 const SPLIT_KEY = 'lecture-column-ratio';
@@ -25,6 +27,7 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
   const [currentPage, setCurrentPage] = useState(1);
   const [visible, setVisible] = useState<Set<number>>(new Set([1]));
   const [jumpOpen, setJumpOpen] = useState(false);
+  const [zoomPage, setZoomPage] = useState<number>();
   const [jumpValue, setJumpValue] = useState('1');
   const [jumpError, setJumpError] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -37,7 +40,7 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
   const session = useMemo(() => loaded ? new NotesSession(id, loaded.detail.notes, loaded.detail.readOnlyError, loaded.pdf.numPages) : undefined, [loaded, id]);
   const scroll = useRef<HTMLDivElement>(null);
   const rows = useRef<(HTMLElement | null)[]>([]);
-  const notes = useRef<(HTMLTextAreaElement | null)[]>([]);
+  const notes = useRef<(NoteEditorHandle | null)[]>([]);
   const jumpInput = useRef<HTMLInputElement>(null);
   const activePage = useRef(1);
   const drag = useRef(false);
@@ -129,7 +132,7 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
         frame = 0;
         const top = container.getBoundingClientRect().top + 24;
         const index = rows.current.findIndex((row) => row && row.getBoundingClientRect().bottom > top);
-        if (index >= 0) { setCurrentPage(index + 1); if (document.activeElement?.tagName !== 'TEXTAREA') activePage.current = index + 1; }
+        if (index >= 0) { setCurrentPage(index + 1); if (!notes.current.some((note) => note?.contains(document.activeElement))) activePage.current = index + 1; }
       });
     };
     container.addEventListener('scroll', updatePage, { passive: true });
@@ -253,15 +256,10 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
           {loaded.ratios.map((ratio, index) => {
             const pageNumber = index + 1;
             return <section className="slide-row" key={pageNumber} data-page={pageNumber} aria-label={`Folie ${pageNumber}`} ref={(element) => { rows.current[index] = element; }}>
-              <figure className="slide-card">
-                <figcaption>PDF-Seite {pageNumber}</figcaption>
-                <div className="slide-placeholder" style={{ aspectRatio: ratio }}>
-                  {active.has(pageNumber) && <PdfCanvas pdf={loaded.pdf} pageNumber={pageNumber} />}
-                </div>
-              </figure>
+              <InlineSlide pdf={loaded.pdf} pageNumber={pageNumber} ratio={ratio} active={active.has(pageNumber)} onExpand={() => setZoomPage(pageNumber)} />
               <div className="note-card">
                 {session && <NoteField session={session} page={pageNumber} id={`note-${pageNumber}`} label={`Notiz zu Folie ${pageNumber}`}
-                  textareaRef={(element) => { notes.current[index] = element; }} onFocus={() => { activePage.current = pageNumber; setCurrentPage(pageNumber); }} />}
+                  editorRef={(element) => { notes.current[index] = element; }} onFocus={() => { activePage.current = pageNumber; setCurrentPage(pageNumber); }} />}
               </div>
             </section>;
           })}
@@ -271,6 +269,7 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
           </section>)}
         </div>}
       </div>
+      {loaded && zoomPage !== undefined && <SlideZoom key={zoomPage} pdf={loaded.pdf} pageNumber={zoomPage} ratio={loaded.ratios[zoomPage - 1]!} onClose={() => setZoomPage(undefined)} />}
     </main>
   );
 }

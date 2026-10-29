@@ -16,6 +16,9 @@
     "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@fastify/static": "^10.1.8",
     "fastify": "^5.12.7",
     "pdfjs-dist": "^6.4.299",

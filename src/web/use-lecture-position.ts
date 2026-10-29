@@ -3,11 +3,12 @@ import type { LectureState } from '../shared/state';
 import { normalizeState } from '../shared/state';
 import { PositionSession } from './position-session';
 import { VisitTracker } from './visit-tracker';
+import type { NoteEditorHandle } from './NoteEditor';
 
 type Elements = {
   scroll: RefObject<HTMLDivElement | null>;
   rows: RefObject<(HTMLElement | null)[]>;
-  notes: RefObject<(HTMLTextAreaElement | null)[]>;
+  notes: RefObject<(NoteEditorHandle | null)[]>;
   activePage: RefObject<number>;
 };
 export function useLecturePosition(id: string, initial: LectureState | undefined, pageCount: number, elements: Elements, onPage: (page: number) => void) {
@@ -41,7 +42,7 @@ export function useLecturePosition(id: string, initial: LectureState | undefined
     clearTimeout(visitTimer.current);
     const delay = visits.nextDelay();
     if (delay !== undefined) visitTimer.current = setTimeout(capture, Math.max(1, delay));
-    const focusedIndex = notes.current.findIndex((note) => note === document.activeElement);
+    const focusedIndex = notes.current.findIndex((note) => note?.contains(document.activeElement));
     if (focusedIndex >= 0) { activePage.current = focusedIndex + 1; lastActiveNote.current = focusedIndex + 1; }
     const active = notes.current[lastActiveNote.current - 1];
     const state = normalizeState({
@@ -84,20 +85,21 @@ export function useLecturePosition(id: string, initial: LectureState | undefined
       frame = requestAnimationFrame(() => { frame = 0; capture(); });
     };
     const focusIn = () => {
-      const index = latestElements.current.notes.current.findIndex((note) => note === document.activeElement);
+      const index = latestElements.current.notes.current.findIndex((note) => note?.contains(document.activeElement));
       if (index >= 0) lastActiveNote.current = index + 1;
       scheduleCapture();
     };
     const flush = () => { capture(); void position.flush(true); };
     const visibility = () => { if (document.visibilityState === 'hidden') flush(); else capture(); };
     const input = (event: Event) => {
-      const index = latestElements.current.notes.current.findIndex((note) => note === event.target);
+      const index = latestElements.current.notes.current.findIndex((note) => note?.contains(event.target));
       if (index >= 0) visits?.edited(index + 1);
       capture();
     };
     container?.addEventListener('scroll', scheduleCapture, { passive: true });
     container?.addEventListener('focusin', focusIn);
     container?.addEventListener('input', input);
+    container?.addEventListener('note-edit', input);
     document.addEventListener('selectionchange', scheduleCapture);
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', visibility);
@@ -106,6 +108,7 @@ export function useLecturePosition(id: string, initial: LectureState | undefined
       container?.removeEventListener('scroll', scheduleCapture);
       container?.removeEventListener('focusin', focusIn);
       container?.removeEventListener('input', input);
+      container?.removeEventListener('note-edit', input);
       document.removeEventListener('selectionchange', scheduleCapture);
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', visibility);

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 
 /** Jede Render-Generation besitzt ihren Canvas: Abbruch und Resize können sich nicht überschreiben. */
-export function PdfCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumber: number }) {
+export function PdfCanvas({ pdf, pageNumber, maxPixels = Infinity }: { pdf: PDFDocumentProxy; pageNumber: number; maxPixels?: number }) {
   const holder = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [dpr, setDpr] = useState(window.devicePixelRatio || 1);
@@ -32,9 +32,10 @@ export function PdfCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumb
         release = () => { page.cleanup(); };
         if (cancelled) return;
         const viewport = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width });
-        canvas.width = Math.ceil(viewport.width * dpr);
-        canvas.height = Math.ceil(viewport.height * dpr);
-        render = page.render({ canvas, viewport, transform: [dpr, 0, 0, dpr, 0, 0] });
+        const outputScale = Math.min(dpr, Math.sqrt(maxPixels / (viewport.width * viewport.height)));
+        canvas.width = Math.ceil(viewport.width * outputScale);
+        canvas.height = Math.ceil(viewport.height * outputScale);
+        render = page.render({ canvas, viewport, transform: [outputScale, 0, 0, outputScale, 0, 0] });
         await render.promise;
         if (!cancelled) canvas.dataset.rendered = 'true';
       } catch (err) {
@@ -53,6 +54,6 @@ export function PdfCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumb
         canvas.width = 0; canvas.height = 0; release?.();
       });
     };
-  }, [pdf, pageNumber, width, dpr]);
+  }, [pdf, pageNumber, width, dpr, maxPixels]);
   return <div className="pdf-canvas" ref={holder}>{error && <p role="alert">Folie konnte nicht dargestellt werden.</p>}</div>;
 }

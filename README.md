@@ -69,6 +69,22 @@ innerhalb des Felds, sodass das Zeilenlayout stabil bleibt. Der Trenner lässt s
 mit der Maus oder per Tastatur (Links/Rechts, Pos1/Ende) verschieben; das
 Spaltenverhältnis wird lokal im Browser gespeichert.
 
+Die +/−-Tasten an jeder Folie vergrößern ihren Inhalt direkt neben den Notizen
+von 100 bis 400 %. Der Folienrahmen und die Notizzeile behalten beim Zoomen ihre
+Größe. Ausschnitte lassen sich mit gedrückter Maustaste verschieben oder scrollen;
+„Einpassen“ zeigt wieder die ganze Folie. Der Zoom gilt je Folie und bleibt beim
+Scrollen innerhalb der geöffneten Vorlesung erhalten. Bei 100 % scrollt das
+Mausrad weiterhin die Vorlesungsansicht. Die Bitmap ist je Folie auf etwa
+8 Megapixel begrenzt und wird weiterhin nur im sichtbaren Umfeld gerendert.
+
+„Vergrößern“ an einer Folie öffnet zusätzlich eine große Detailansicht. Mit +/− lässt sich
+die Folie von 100 bis 400 % vergrößern; 100 % bedeutet die ganze Folie im Fenster.
+Vergrößerte Bereiche lassen sich mit gedrückter Maustaste verschieben oder über
+Scrollleisten, Mausrad und Pfeiltasten erkunden. „Einpassen“ setzt den Zoom zurück.
+„Schließen“ oder `Esc` führt zur unveränderten Leseposition zurück. Die PDF wird
+bei Zoom und Fensteränderungen neu gerendert; die zusätzliche Bitmap ist auf
+etwa 16 Megapixel begrenzt.
+
 - `Alt+↓` / `Alt+↑`: nächste/vorherige Folie mit Fokus im Notizfeld.
 - `Esc`: Notizfeld verlassen; Pfeiltasten scrollen wieder die Ansicht.
 - `Strg+G` oder der Folienzähler: zu einer Foliennummer springen.
@@ -102,6 +118,31 @@ Verlassen der Seite werden ausstehende Notizen per Keepalive-Request geflusht.
 Ungespeicherte Änderungen lösen eine Warnung beim Schließen aus; ein Wechsel zur
 Übersicht wartet auf die Speicherung und bleibt bei Fehlern oder Konflikten in
 der Vorlesung.
+
+„Stichpunkte“ über einem Notizfeld aktiviert den Listenmodus für dieses Feld und
+ergänzt `- ` an der aktuellen Zeile. `Enter` setzt auch leere Punkte auf gleicher
+Ebene fort; `Tab` rückt um vier Leerzeichen ein, `Umschalt+Tab` wieder aus.
+Eine Textauswahl bleibt beim Ein-/Ausrücken erhalten. `Rücktaste` rückt einen
+leeren Punkt aus; auf oberster Ebene bleibt sie ohne Wirkung und erhält den Marker.
+`Umschalt+Enter` erzeugt eine Fortsetzungszeile innerhalb des Punktes.
+Nur erneutes Anklicken von „Stichpunkte“ beendet den Modus, ohne Textänderung.
+Außerhalb des Modus gelten die normalen Tastenfunktionen. Der Modus wird nicht
+gespeichert; der eingegebene Text bleibt als einfache Markdown-Liste erhalten.
+
+Lange Stichpunkte umbrechen im Notizeditor automatisch unter dem ersten Zeichen
+nach dem Listenmarker – auch auf verschachtelten Ebenen und bei vorhandenen
+Notizen, unabhängig vom Stichpunktmodus. Dieser hängende Einzug betrifft nur die
+Anzeige: Weder zusätzliche Zeilenumbrüche noch Leerzeichen werden gespeichert.
+Der lokal gebündelte CodeMirror-Editor unterstützt Klartext-Einfügen sowie
+`Strg+Z` und `Strg+Umschalt+Z`/`Strg+Y` zum Rückgängig machen und Wiederholen.
+
+„Nicht relevant“ ersetzt das Notizfeld durch „Keine relevanten Informationen
+enthalten“. Vorhandener Text wird erst nach einer eigenen Bestätigung verworfen;
+Abbrechen oder `Esc` erhält ihn. Erneutes Anklicken öffnet ein leeres Notizfeld.
+Gespeichert wird der Klartextmarker `- Nicht relevant`. Bereits vorhandene Notizen,
+die ausschließlich diesen Marker enthalten (unabhängig von Groß-/Kleinschreibung),
+erscheinen beim Laden automatisch in dieser Ansicht, ohne Datenmigration.
+Stichpunkte sind dort deaktiviert; Speicherfehler und Konflikte bleiben sichtbar.
 
 Die Datei `notes/<Modul>/<Vorlesung>/notes.md` ist die Quelle der Notizen. Sie
 enthält nur nicht-leere Notizblöcke, numerisch nach Seite sortiert. Marker stehen

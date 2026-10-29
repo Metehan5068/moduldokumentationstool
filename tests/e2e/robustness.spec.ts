@@ -1,3 +1,4 @@
+import { expectEditorText } from './editor';
 import { mkdtemp, mkdir, readFile, readdir, rm, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
@@ -31,13 +32,13 @@ test('ersetzte PDF warnt mit Seitenzahlen; Notiz ohne Folie bleibt editierbar un
   const name = 'Geänderte Quelle'; await open(page, name); await note(page, 3, 'Meine ursprüngliche Frage');
   await writeFile(pdf(name), textPdf([['Nur noch eine Seite']])); await page.reload();
   const warning = page.locator('.source-warning'); await expect(warning).toContainText('vorher 3, jetzt 1 Seiten');
-  const detached = page.getByLabel('Notiz ohne Folie 3', { exact: true }); await expect(detached).toHaveValue('Meine ursprüngliche Frage');
+  const detached = page.getByLabel('Notiz ohne Folie 3', { exact: true }); await expectEditorText(detached, 'Meine ursprüngliche Frage');
   await detached.fill('Notiz ohne Folie weiter bearbeitet'); await page.keyboard.press('Control+s');
   await expect(page.locator('.lecture-toolbar [role=status]')).toHaveText('Gespeichert');
   expect(parseNotes(await readFile(notes(name), 'utf8')).notes[3]).toBe('Notiz ohne Folie weiter bearbeitet');
   await page.screenshot({ path: 'test-results/phase6-changed-source.png' });
   await page.getByRole('button', { name: 'Zuordnung geprüft', exact: true }).click(); await expect(warning).toHaveCount(0);
-  await page.reload(); await expect(detached).toHaveValue('Notiz ohne Folie weiter bearbeitet'); await expect(warning).toHaveCount(0);
+  await page.reload(); await expectEditorText(detached, 'Notiz ohne Folie weiter bearbeitet'); await expect(warning).toHaveCount(0);
 });
 
 test('bestätigt eine inzwischen erneut ersetzte PDF nicht versehentlich', async ({ page }) => {
@@ -62,7 +63,7 @@ test('umbenannte PDF wird per Hash vorgeschlagen und ausdrücklich mit erhaltene
   await row.getByLabel(`PDF für ids/${old}`, { exact: true }).selectOption(lectureId(`module/ids/${next}.pdf`));
   await row.getByRole('button', { name: 'Verknüpfen', exact: true }).click();
   await expect(section).toHaveCount(0); await page.getByRole('link', { name: next, exact: true }).click();
-  await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toHaveValue('Diese Frage bleibt nach Umbenennung erhalten.');
+  await expectEditorText(page.getByLabel('Notiz zu Folie 1', { exact: true }), 'Diese Frage bleibt nach Umbenennung erhalten.');
   await expect(page.getByRole('checkbox', { name: 'erledigt', exact: true })).toBeChecked();
   await expect(page.locator('.source-warning')).toHaveCount(0);
   const backups = await readdir(join(root, 'notes', '.relink-backups')); expect(backups.length).toBeGreaterThan(0);

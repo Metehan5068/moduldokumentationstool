@@ -1,3 +1,4 @@
+import { expectEditorText, setEditorSelection, editorSelection } from './editor';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -75,7 +76,7 @@ test('Plan-Abnahme: Folie 13 halb gescrollt, Cursor im Satz, Tab schließen, Ser
     const bounds = row.getBoundingClientRect();
     container.scrollTop += bounds.top - container.getBoundingClientRect().top - container.clientTop + bounds.height * 0.5;
   });
-  await page.getByLabel('Notiz zu Folie 13', { exact: true }).evaluate((note) => (note as HTMLTextAreaElement).setSelectionRange(84, 84));
+  await setEditorSelection(page.getByLabel('Notiz zu Folie 13', { exact: true }), 84, 84);
   expect(await offset(page, 13)).toBeCloseTo(0.5, 2);
   await page.close(); // pagehide muss den letzten Stand sofort senden, ohne auf den Throttle zu warten.
   await expect.poll(async () => {
@@ -89,8 +90,8 @@ test('Plan-Abnahme: Folie 13 halb gescrollt, Cursor im Satz, Tab schließen, Ser
   await expect(resume).toContainText('Folie 13 von 20');
   await resume.getByRole('link', { name: 'Öffnen', exact: true }).click();
   const note = reopened.getByLabel('Notiz zu Folie 13', { exact: true });
-  await expect(note).toBeFocused(); await expect(note).toHaveValue(text);
-  expect(await note.evaluate((element) => ({ start: (element as HTMLTextAreaElement).selectionStart, end: (element as HTMLTextAreaElement).selectionEnd }))).toEqual({ start: 84, end: 84 });
+  await expect(note).toBeFocused(); await expectEditorText(note, text);
+  expect(await editorSelection(note).then(({ start, end }) => ({ start, end }))).toEqual({ start: 84, end: 84 });
   expect(await offset(reopened, 13)).toBeCloseTo(before.pageOffsetRatio, 2);
   await expect(reopened.locator('[data-page="13"] canvas[data-rendered=true]')).toBeVisible();
   await reopened.screenshot({ path: 'test-results/phase4-resume.png' });
@@ -121,7 +122,7 @@ test('aktives Notizfeld und Cursor werden ohne Verschieben der separat gespeiche
   await goTo(page, 5); const note = page.getByLabel('Notiz zu Folie 5', { exact: true });
   await note.fill('Eine Auswahl im Text bleibt beim Scrollen erhalten.'); await page.keyboard.press('Control+s');
   await expect(page.locator('.lecture-toolbar [role=status]')).toHaveText('Gespeichert');
-  await note.evaluate((element) => (element as HTMLTextAreaElement).setSelectionRange(5, 12));
+  await setEditorSelection(note, 5, 12);
   await page.keyboard.press('Escape');
   await expect(page.locator('.lecture-scroll')).toBeFocused();
   await page.locator('[data-page="13"]').evaluate((row) => row.scrollIntoView({ block: 'start' }));
@@ -133,7 +134,7 @@ test('aktives Notizfeld und Cursor werden ohne Verschieben der separat gespeiche
     const detail = await response.json(); return detail.state.lastPage === 13 && detail.state.activeNotePage === 5 && detail.state.selection.end === 12;
   }).toBe(true);
   await page.reload(); await expect(note).toBeFocused();
-  expect(await note.evaluate((element) => ({ start: (element as HTMLTextAreaElement).selectionStart, end: (element as HTMLTextAreaElement).selectionEnd }))).toEqual({ start: 5, end: 12 });
+  expect(await editorSelection(note).then(({ start, end }) => ({ start, end }))).toEqual({ start: 5, end: 12 });
   const scrollAfter = await page.locator('.lecture-scroll').evaluate((element) => element.scrollTop);
   expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(2);
 });
@@ -152,7 +153,7 @@ test('relativer Seitenversatz bleibt bei anderer Fensterbreite erhalten', async 
     const bounds = row.getBoundingClientRect();
     container.scrollTop += bounds.top - container.getBoundingClientRect().top - container.clientTop + bounds.height * 0.42;
   });
-  await page.getByLabel('Notiz zu Folie 13', { exact: true }).evaluate((element) => (element as HTMLTextAreaElement).setSelectionRange(15, 15));
+  await setEditorSelection(page.getByLabel('Notiz zu Folie 13', { exact: true }), 15, 15);
   await page.close();
   await expect.poll(async () => {
     const response = await request.get(`${baseURL}/api/lectures/${lecture}`);
@@ -162,7 +163,7 @@ test('relativer Seitenversatz bleibt bei anderer Fensterbreite erhalten', async 
   await reopened.goto(`${baseURL}/#vorlesung/${lecture}`);
   const note = reopened.getByLabel('Notiz zu Folie 13', { exact: true });
   await expect(note).toBeFocused(); expect(await offset(reopened, 13)).toBeCloseTo(0.42, 2);
-  expect(await note.evaluate((element) => (element as HTMLTextAreaElement).selectionStart)).toBe(15);
+  expect((await editorSelection(note)).start).toBe(15);
 });
 
 test('anhaltendes Scrollen erzeugt höchstens alle 1,5 Sekunden einen State-Request', async ({ page }) => {
