@@ -4,6 +4,7 @@ import { bulletKeyEdit, enableBullets, type BulletEdit } from './bullet-edit';
 import { NoteEditor, type NoteEditorHandle } from './NoteEditor';
 import { ConfirmIrrelevant, IrrelevantNote } from './NoteRelevance';
 import { IRRELEVANT_NOTE, isIrrelevantNote } from './note-relevance';
+import { NoteCopyDialog } from './NoteCopyDialog';
 export function NoteField({ session, page, id, label, editorRef, onFocus }: {
   session: NotesSession; page: number; id: string; label: string; editorRef?: (handle: NoteEditorHandle | null) => void; onFocus?: () => void;
 }) {
@@ -12,6 +13,7 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
   const [bullets, setBullets] = useState(false);
   const [irrelevant, setIrrelevant] = useState(() => isIrrelevantNote(draft.text));
   const [confirmation, setConfirmation] = useState<{ text: string; conflict: typeof draft.conflict }>();
+  const [copyRequest, setCopyRequest] = useState<{ text: string; conflict: typeof draft.conflict }>();
   const [relevanceError, setRelevanceError] = useState<string>();
   const locallyEdited = useRef<string | undefined>(undefined);
   const focusAfterChange = useRef(false);
@@ -36,7 +38,7 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
   }, [draft.text]);
   useLayoutEffect(() => {
     if (focusAfterChange.current) { focusAfterChange.current = false; field.current?.focus({ preventScroll: true }); }
-  }, [irrelevant]);
+  }, [irrelevant, copyRequest]);
   const changeRelevance = (next: boolean) => {
     if (session.readOnlyError) return;
     const text = next ? IRRELEVANT_NOTE : '';
@@ -53,7 +55,14 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
   };
   return <>
     <div className="note-field-toolbar"><label htmlFor={id} onClick={() => field.current?.focus({ preventScroll: true })}>{label}</label>
-      <div className="note-field-actions"><button type="button" aria-pressed={bullets} aria-label={`Stichpunkte: ${label}`} disabled={irrelevant || Boolean(session.readOnlyError)}
+      <div className="note-field-actions">
+      <button type="button" aria-label={`Kopieren: ${label}`} disabled={Boolean(session.readOnlyError)}
+        onMouseDown={(event) => event.preventDefault()} onClick={() => {
+          if (session.readOnlyError) return;
+          const current = session.get(page);
+          setCopyRequest({ text: current.text, conflict: current.conflict });
+        }}>Kopieren</button>
+      <button type="button" aria-pressed={bullets} aria-label={`Stichpunkte: ${label}`} disabled={irrelevant || Boolean(session.readOnlyError)}
         onMouseDown={(event) => event.preventDefault()} onClick={() => {
           const element = field.current!;
           if (!bullets) {
@@ -95,6 +104,29 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
         setConfirmation(undefined); setRelevanceError('Die Notiz hat sich inzwischen geändert. Bitte erneut prüfen und markieren.'); return;
       }
       setConfirmation(undefined); changeRelevance(true);
+    }} />}
+    {copyRequest && <NoteCopyDialog id={id} pageCount={session.pageCount} replacing={Boolean(copyRequest.text.trim())} disabled={Boolean(session.readOnlyError)} onCancel={() => setCopyRequest(undefined)} onCopy={(sourcePage) => {
+      if (session.readOnlyError) return 'Die Notizen sind schreibgeschützt.';
+      if (!Number.isInteger(sourcePage) || sourcePage < 1 || sourcePage > session.pageCount) return 'Die Quellfolie ist ungültig.';
+      if (sourcePage === page) return 'Bitte eine andere Folie als Quelle wählen.';
+      const target = session.get(page);
+      if (target.text !== copyRequest.text || target.conflict !== copyRequest.conflict) return 'Die Zielnotiz hat sich inzwischen geändert. Bitte abbrechen und neu öffnen.';
+      const source = session.get(sourcePage);
+      if (source.conflict) return 'Die Quellnotiz hat einen ungelösten Konflikt. Bitte diesen zuerst klären.';
+      if (!source.text.trim()) return 'Die gewählte Folie enthält keine Notiz zum Kopieren.';
+      const text = source.text;
+      const nextIrrelevant = isIrrelevantNote(text);
+      focusAfterChange.current = true;
+      setCopyRequest(undefined); setRelevanceError(undefined);
+      if (!irrelevant && !nextIrrelevant) {
+        field.current!.applyEdit({ start: 0, end: target.text.length, text, selectionStart: 0, selectionEnd: 0 });
+      } else {
+        locallyEdited.current = text;
+        setIrrelevant(nextIrrelevant); setBullets(false);
+        session.edit(page, text);
+        field.current?.element.dispatchEvent(new Event('note-edit', { bubbles: true }));
+      }
+      return undefined;
     }} />}
     <div className="note-save-status"><span>{statusText[draft.status]}</span>
       {draft.status === 'error' && !session.readOnlyError && <button type="button" onClick={() => { void session.save(page); }}>Wiederholen</button>}

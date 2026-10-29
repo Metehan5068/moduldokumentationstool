@@ -144,6 +144,13 @@ die ausschließlich diesen Marker enthalten (unabhängig von Groß-/Kleinschreib
 erscheinen beim Laden automatisch in dieser Ansicht, ohne Datenmigration.
 Stichpunkte sind dort deaktiviert; Speicherfehler und Konflikte bleiben sichtbar.
 
+„Kopieren“ öffnet die Auswahl einer Quellfolie derselben Vorlesung und übernimmt
+deren aktuellen Notiztext, einschließlich lokaler Entwürfe. Vorhandener Zieltext
+wird erst beim ausdrücklich beschrifteten Bestätigen ersetzt. Die Kopie bleibt
+unabhängig von späteren Änderungen an der Quelle. Leere Quellen, dieselbe Folie
+und Quellen mit ungelöstem Konflikt werden abgewiesen. Auch „Nicht relevant“-Notizen
+lassen sich kopieren; die passende Ansicht wird automatisch gewählt.
+
 Die Datei `notes/<Modul>/<Vorlesung>/notes.md` ist die Quelle der Notizen. Sie
 enthält nur nicht-leere Notizblöcke, numerisch nach Seite sortiert. Marker stehen
 jeweils auf einer eigenen Zeile. Marker im Nutzertext werden mit einem zusätzlichen

@@ -23,7 +23,7 @@ export class NotesSession {
   private disposed = false;
   private leaving = false;
 
-  constructor(readonly id: string, private initial: Record<number, NoteValue>, readOnlyError?: NotesFileError, private readonly pageCount = Infinity) {
+  constructor(readonly id: string, private initial: Record<number, NoteValue>, readOnlyError?: NotesFileError, readonly pageCount = Infinity) {
     this.readOnlyError = readOnlyError;
     for (const page of Object.keys(initial)) this.get(Number(page));
   }
