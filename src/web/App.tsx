@@ -77,7 +77,7 @@ function Overview() {
                     <span className="lecture-title">{lecture.pageCount !== null ? <a href={`#vorlesung/${lecture.id}`}>{lecture.title}</a> : lecture.title}</span>
                     {lecture.pageCount !== null && <span className="page-count">{lecture.pageCount} {lecture.pageCount === 1 ? 'Seite' : 'Seiten'}</span>}
                     {lecture.progress && <span className="lecture-progress">
-                      {lecture.progress.completed ? `✓ erledigt${lecture.pageCount !== null ? ` · ${lecture.pageCount}/${lecture.pageCount} ${lecture.pageCount === 1 ? 'Folie' : 'Folien'}` : ''}` : lecture.progress.maxPageVisited > 0 ? `bis Folie ${lecture.progress.maxPageVisited}/${lecture.pageCount ?? '?'}` : 'Noch nicht begonnen'}
+                      {lecture.progress.completed ? <><span className="completed-check" aria-hidden="true">✓</span>{` erledigt${lecture.pageCount !== null ? ` · ${lecture.pageCount}/${lecture.pageCount} ${lecture.pageCount === 1 ? 'Folie' : 'Folien'}` : ''}`}</> : lecture.progress.maxPageVisited > 0 ? `bis Folie ${lecture.progress.maxPageVisited}/${lecture.pageCount ?? '?'}` : 'Noch nicht begonnen'}
                       {' · '}{lecture.progress.noteCount === null ? 'Notizdatei prüfen' : `${lecture.progress.noteCount} ${lecture.progress.noteCount === 1 ? 'Notiz' : 'Notizen'} mit Inhalt`}
                     </span>}
                     {lecture.error && <span className="bad">{lecture.error}</span>}

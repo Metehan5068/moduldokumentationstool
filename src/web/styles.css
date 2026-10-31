@@ -107,6 +107,7 @@ h1 { font-size: 24px; margin: 0 0 var(--s5); }
 .lecture-title a:hover { color: var(--accent-text); }
 .page-count { white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
 .lecture-progress { grid-column: 1 / -1; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lecture-progress .completed-check { color: #00ff41; }
 .source-badge { grid-column: 1 / -1; color: var(--warn); font-size: 12px; }
 .relink-form { grid-column: 1 / -1; display: grid; gap: var(--s3); margin-top: var(--s2); }
 .relink-form select { min-width: 0; width: 100%; }
