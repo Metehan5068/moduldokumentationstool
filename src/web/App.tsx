@@ -25,6 +25,7 @@ export function App() {
 
 function Overview() {
   const [overview, setOverview] = useState<OverviewResponse>();
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
@@ -62,7 +63,13 @@ function Overview() {
         {overview && overview.modules.length === 0 && <p className="empty">Noch keine Module gefunden. Lege einen Modulordner mit PDFs unter module/ im Datenordner an und wähle „Neu einlesen“.</p>}
         {overview?.modules.map((module) => (
           <section className="module" key={module.name} aria-label={`Modul ${module.name}`}>
-            <h2>{module.name}</h2>
+            <h2><button type="button" className="module-toggle" aria-expanded={expandedModules.has(module.name)}
+              aria-controls={`module-lectures-${encodeURIComponent(module.name)}`} onClick={() => setExpandedModules((previous) => {
+                const next = new Set(previous);
+                if (next.has(module.name)) next.delete(module.name); else next.add(module.name);
+                return next;
+              })}><span className="module-arrow" aria-hidden="true">▶</span>{module.name}</button></h2>
+            <div id={`module-lectures-${encodeURIComponent(module.name)}`} hidden={!expandedModules.has(module.name)}>
             {module.lectures.length === 0 ? <p className="empty">Keine PDF-Dateien in diesem Modul.</p> : (
               <ul className="lectures">
                 {module.lectures.map((lecture) => (
@@ -70,8 +77,8 @@ function Overview() {
                     <span className="lecture-title">{lecture.pageCount !== null ? <a href={`#vorlesung/${lecture.id}`}>{lecture.title}</a> : lecture.title}</span>
                     {lecture.pageCount !== null && <span className="page-count">{lecture.pageCount} {lecture.pageCount === 1 ? 'Seite' : 'Seiten'}</span>}
                     {lecture.progress && <span className="lecture-progress">
-                      {lecture.progress.completed ? '✓ erledigt' : lecture.progress.maxPageVisited > 0 ? `bis Folie ${lecture.progress.maxPageVisited}/${lecture.pageCount ?? '?'}` : 'Noch nicht begonnen'}
-                      {' · '}{lecture.progress.noteCount === null ? 'Notizdatei prüfen' : `${lecture.progress.noteCount} ${lecture.progress.noteCount === 1 ? 'Notiz' : 'Notizen'}`}
+                      {lecture.progress.completed ? `✓ erledigt${lecture.pageCount !== null ? ` · ${lecture.pageCount}/${lecture.pageCount} ${lecture.pageCount === 1 ? 'Folie' : 'Folien'}` : ''}` : lecture.progress.maxPageVisited > 0 ? `bis Folie ${lecture.progress.maxPageVisited}/${lecture.pageCount ?? '?'}` : 'Noch nicht begonnen'}
+                      {' · '}{lecture.progress.noteCount === null ? 'Notizdatei prüfen' : `${lecture.progress.noteCount} ${lecture.progress.noteCount === 1 ? 'Notiz' : 'Notizen'} mit Inhalt`}
                     </span>}
                     {lecture.error && <span className="bad">{lecture.error}</span>}
                     {lecture.sourceChanged && <span className="source-badge">⚠ PDF geändert – Zuordnung prüfen</span>}
@@ -79,6 +86,7 @@ function Overview() {
                 ))}
               </ul>
             )}
+            </div>
           </section>
         ))}
         {overview?.orphans?.length && <section className="module" aria-label="Notizen ohne PDF">

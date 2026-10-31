@@ -33,11 +33,11 @@ describe('Stichpunktbearbeitung', () => {
     const insideIndent = bulletKeyEdit('    - Punkt', 2, 2, 'Tab', true)!;
     expect(insideIndent.selectionStart).toBe(0);
   });
-  it('rückt nur leere Punkte aus und lässt die oberste Ebene samt Cursor unverändert', () => {
+  it('rückt nur leere Punkte aus und schützt den Punkt in der ersten Zeile', () => {
     const nested = bulletKeyEdit('    - ', 6, 6, 'Backspace')!;
     expect(apply('    - ', nested)).toBe('- ');
     expect(nested.selectionStart).toBe(2);
-    for (const value of ['- ', 'Vorher\n- ']) {
+    for (const value of ['- ', '* ', '+ ']) {
       for (let repeat = 0; repeat < 3; repeat++) {
         const unchanged = bulletKeyEdit(value, value.length, value.length, 'Backspace')!;
         expect(unchanged).toBeDefined();
@@ -47,6 +47,19 @@ describe('Stichpunktbearbeitung', () => {
     }
     expect(bulletKeyEdit('- Text', 6, 6, 'Backspace')).toBeUndefined();
     expect(bulletKeyEdit('- ', 0, 2, 'Backspace')).toBeUndefined();
+  });
+  it('entfernt leere Punkte auf oberster Ebene und setzt den Cursor ans Ende der vorherigen Zeile', () => {
+    for (const previous of ['Vorher', '- Vorher', '    - Unterpunkt', '- ', '']) {
+      for (const marker of ['- ', '* ', '+ ']) {
+        const value = `${previous}\n${marker}\n- Danach`;
+        const position = previous.length + 1 + marker.length;
+        const edit = bulletKeyEdit(value, position, position, 'Backspace')!;
+        expect(apply(value, edit)).toBe(`${previous}\n- Danach`);
+        expect([edit.selectionStart, edit.selectionEnd]).toEqual([previous.length, previous.length]);
+      }
+    }
+    const value = '- Vorher\n- ';
+    expect(apply(value, bulletKeyEdit(value, value.length, value.length, 'Backspace'))).toBe('- Vorher');
   });
   it('erzeugt Fortsetzungszeilen mit Umschalt+Enter und nimmt danach die Liste wieder auf', () => {
     const value = '    - Punkt';

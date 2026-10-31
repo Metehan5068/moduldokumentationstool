@@ -55,6 +55,13 @@ export class StateStore {
       const path = await this.path(lecture, 'meta.json');
       const meta = await cachedMeta(path);
       if (!meta) throw new Error('Metadaten fehlen oder sind ungültig. Bitte neu einlesen.');
+      if (completed && lecture.summary.pageCount !== null) {
+        const previous = await this.read(lecture);
+        const maxPageVisited = Math.max(previous.state.maxPageVisited, lecture.summary.pageCount);
+        if (maxPageVisited !== previous.state.maxPageVisited) {
+          await writeJson(this.config.notesRoot, await this.path(lecture, 'state.json'), { ...previous.state, maxPageVisited });
+        }
+      }
       await writeJson(this.config.notesRoot, path, { ...meta, completed });
       return completed;
     });

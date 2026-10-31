@@ -73,6 +73,21 @@ it('erhält maxPageVisited beim Zurückscrollen und ignoriert verspätete älter
   expect((await app.inject(url)).json().state).toMatchObject({ lastPage: 3, activeNotePage: 3, maxPageVisited: 20 });
 });
 
+it('zählt beim Erledigt-Haken alle Folien und erhält Leseposition und Fortschritt auch nach verspäteten Requests und Abwählen', async () => {
+  const directory = await setup();
+  const before = state({ maxPageVisited: 19 });
+  await put(before);
+  expect((await app.inject({ method: 'PUT', url: `${url}/completed`, payload: { completed: true } })).statusCode).toBe(200);
+  expect(JSON.parse(await readFile(join(directory, 'state.json'), 'utf8'))).toEqual({ ...before, maxPageVisited: 20 });
+  // Auch der noch offene Client darf den vollständigen Fortschritt nicht zurücksetzen.
+  await put(state({ maxPageVisited: 19, updatedAt: '2026-10-28T01:00:01.000Z' }));
+  await app.inject({ method: 'PUT', url: `${url}/completed`, payload: { completed: false } });
+  await app.close(); app = await buildApp(loadConfig({ DATA_ROOT: root }));
+  expect((await app.inject(url)).json()).toMatchObject({ completed: false, state: { maxPageVisited: 20, lastPage: 13, pageOffsetRatio: 0.5, activeNotePage: 13, selection: before.selection } });
+  const overview = (await app.inject('/api/overview')).json<OverviewResponse>();
+  expect(overview.modules[0]?.lectures[0]?.progress).toMatchObject({ completed: false, maxPageVisited: 20 });
+});
+
 it('erhält erledigt bei Rescan und PDF-Änderung sowie Hash und Notizen beim Umschalten', async () => {
   const directory = await setup();
   const metaPath = join(directory, 'meta.json');
@@ -111,6 +126,24 @@ it('zeigt besuchte Seiten getrennt von Notizanzahl und wählt Weiter mit nach le
   await app.inject('/api/overview');
   await app.inject({ method: 'PUT', url: `/api/lectures/${nextId}/state`, payload: state({ lastPage: 2, activeNotePage: 2, maxPageVisited: 2, updatedAt: '2026-10-28T01:00:05.000Z' }) });
   expect((await app.inject('/api/overview')).json<OverviewResponse>().resume?.id).toBe(nextId);
+});
+
+it('bietet erledigte Vorlesungen nicht unter Weiter mit an und erhält ihre echte Notizanzahl und Leseposition', async () => {
+  await setup();
+  await put(state());
+  await app.inject({ method: 'PUT', url: `${url}/notes/1`, payload: { text: 'Eine Notiz', baseHash: noteHash('') } });
+  await writeFile(join(root, 'module', 'ids', 'Neu.pdf'), testPdf(4));
+  const nextId = lectureId('module/ids/Neu.pdf');
+  await app.inject('/api/overview');
+  await app.inject({ method: 'PUT', url: `/api/lectures/${nextId}/state`, payload: state({ lastPage: 3, activeNotePage: 3, maxPageVisited: 3, updatedAt: '2026-10-28T01:00:05.000Z' }) });
+  await app.inject({ method: 'PUT', url: `/api/lectures/${nextId}/completed`, payload: { completed: true } });
+  const overview = (await app.inject('/api/overview')).json<OverviewResponse>();
+  expect(overview.resume).toMatchObject({ id, lastPage: 13 });
+  expect(overview.modules[0]?.lectures.find((lecture) => lecture.id === nextId)?.progress).toMatchObject({ completed: true, lastPage: 3, noteCount: 0 });
+  await app.inject({ method: 'PUT', url: `${url}/completed`, payload: { completed: true } });
+  const allCompleted = (await app.inject('/api/overview')).json<OverviewResponse>();
+  expect(allCompleted.resume).toBeUndefined();
+  expect(allCompleted.modules[0]?.lectures.find((lecture) => lecture.id === id)?.progress).toMatchObject({ completed: true, lastPage: 13, noteCount: 1 });
 });
 
 it('behandelt kaputtes state.json als flüchtige Daten und lässt Notizen weiter speichern', async () => {

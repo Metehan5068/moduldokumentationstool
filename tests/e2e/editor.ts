@@ -6,6 +6,7 @@ export async function editorText(editor: Locator): Promise<string> {
     if (element instanceof HTMLTextAreaElement) return element.value;
     return [...element.querySelectorAll('.cm-line')].map((line) => {
       const copy = line.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll<HTMLElement>('[data-math-source]').forEach((formula) => formula.replaceWith(formula.dataset.mathSource!));
       copy.querySelectorAll('.cm-placeholder,.cm-widgetBuffer').forEach((widget) => widget.remove());
       return copy.textContent ?? '';
     }).join('\n');

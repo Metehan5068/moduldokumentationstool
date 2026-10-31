@@ -1,3 +1,4 @@
+import { expandModule } from './overview';
 import { expectEditorText, setEditorSelection, editorSelection } from './editor';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -64,7 +65,7 @@ async function storedState(): Promise<LectureState | undefined> {
 }
 
 test('Plan-Abnahme: Folie 13 halb gescrollt, Cursor im Satz, Tab schließen, Serverprozess neu starten und weiterlernen', async ({ page, context, request }) => {
-  await page.goto(baseURL); await page.getByRole('link', { name: title, exact: true }).click();
+  await page.goto(baseURL); await expandModule(page); await page.getByRole('link', { name: title, exact: true }).click();
   await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
   await goTo(page, 13);
   const text = 'Die Entropie beschreibt die Unreinheit der Daten. Hier steht ein längerer Satz für die Cursor-Wiederherstellung. '.repeat(3);
@@ -97,19 +98,22 @@ test('Plan-Abnahme: Folie 13 halb gescrollt, Cursor im Satz, Tab schließen, Ser
   await reopened.screenshot({ path: 'test-results/phase4-resume.png' });
   await reopened.getByRole('checkbox', { name: 'erledigt', exact: true }).check();
   await expect(reopened.getByRole('checkbox', { name: 'erledigt', exact: true })).toBeChecked();
-  await goTo(reopened, 20);
+  // Der Haken zählt alle Folien, ohne erst zur letzten Folie springen zu müssen.
   await expect.poll(async () => (await (await request.get(`${baseURL}/api/lectures/${id}`)).json()).state.maxPageVisited, { timeout: 8000 }).toBe(20);
+  expect(await offset(reopened, 13)).toBeCloseTo(before.pageOffsetRatio, 2);
   await goTo(reopened, 3);
-  await reopened.getByRole('link', { name: '← Übersicht' }).click();
+  await reopened.getByRole('link', { name: '← Übersicht' }).click(); await expandModule(reopened);
   const row = reopened.locator('.lectures li').filter({ has: reopened.getByRole('link', { name: title, exact: true }) });
-  await expect(row).toContainText('✓ erledigt'); await expect(row).toContainText('1 Notiz');
+  await expect(row).toContainText('✓ erledigt · 20/20 Folien');
+  await expect(row).toContainText('1 Notiz mit Inhalt');
+  await expect(reopened.getByRole('region', { name: 'Weiter mit', exact: true })).toHaveCount(0);
   const detail = await request.get(`${baseURL}/api/lectures/${id}`);
   expect((await detail.json()).state.maxPageVisited).toBe(20);
   await row.getByRole('link', { name: title, exact: true }).click();
   await expect(reopened.getByRole('checkbox', { name: 'erledigt', exact: true })).toBeChecked();
   await reopened.getByRole('checkbox', { name: 'erledigt', exact: true }).uncheck();
   await expect(reopened.getByRole('checkbox', { name: 'erledigt', exact: true })).not.toBeChecked();
-  await reopened.getByRole('link', { name: '← Übersicht' }).click();
+  await reopened.getByRole('link', { name: '← Übersicht' }).click(); await expandModule(reopened);
   await expect(row).toContainText('bis Folie 20/20');
   await reopened.screenshot({ path: 'test-results/phase4-overview.png' });
 });
@@ -117,7 +121,7 @@ test('Plan-Abnahme: Folie 13 halb gescrollt, Cursor im Satz, Tab schließen, Ser
 test('aktives Notizfeld und Cursor werden ohne Verschieben der separat gespeicherten Scrollposition wiederhergestellt', async ({ page }) => {
   const separateTitle = 'Getrennte Position';
   await writeFile(join(root, 'module', 'ids', `${separateTitle}.pdf`), lecturePdf(20));
-  await page.goto(baseURL); await page.getByRole('link', { name: separateTitle, exact: true }).click();
+  await page.goto(baseURL); await expandModule(page); await page.getByRole('link', { name: separateTitle, exact: true }).click();
   await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
   await goTo(page, 5); const note = page.getByLabel('Notiz zu Folie 5', { exact: true });
   await note.fill('Eine Auswahl im Text bleibt beim Scrollen erhalten.'); await page.keyboard.press('Control+s');
@@ -143,7 +147,7 @@ test('relativer Seitenversatz bleibt bei anderer Fensterbreite erhalten', async 
   const name = 'Andere Fensterbreite';
   const lecture = lectureId(`module/ids/${name}.pdf`);
   await writeFile(join(root, 'module', 'ids', `${name}.pdf`), lecturePdf(20));
-  await page.goto(baseURL); await page.getByRole('link', { name, exact: true }).click();
+  await page.goto(baseURL); await expandModule(page); await page.getByRole('link', { name, exact: true }).click();
   await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
   await goTo(page, 13);
   await page.getByLabel('Notiz zu Folie 13', { exact: true }).fill('Cursor und relative Folienposition funktionieren auch bei anderer Fensterbreite.');
@@ -171,7 +175,7 @@ test('anhaltendes Scrollen erzeugt höchstens alle 1,5 Sekunden einen State-Requ
   await writeFile(join(root, 'module', 'ids', `${name}.pdf`), lecturePdf(20));
   const requests: number[] = [];
   page.on('request', (request) => { if (request.method() === 'PUT' && request.url().endsWith(`/api/lectures/${lecture}/state`)) requests.push(Date.now()); });
-  await page.goto(baseURL); await page.getByRole('link', { name, exact: true }).click();
+  await page.goto(baseURL); await expandModule(page); await page.getByRole('link', { name, exact: true }).click();
   await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
   await page.locator('.lecture-scroll').evaluate(async (element) => {
     const end = performance.now() + 3600;
@@ -191,7 +195,7 @@ test('anhaltendes Scrollen erzeugt höchstens alle 1,5 Sekunden einen State-Requ
 test('fehlgeschlagenes Erledigt-Speichern wird angezeigt und der Haken zurückgesetzt', async ({ page }) => {
   const name = 'Erledigt Fehler'; const lecture = lectureId(`module/ids/${name}.pdf`);
   await writeFile(join(root, 'module', 'ids', `${name}.pdf`), lecturePdf(4));
-  await page.goto(baseURL); await page.getByRole('link', { name, exact: true }).click();
+  await page.goto(baseURL); await expandModule(page); await page.getByRole('link', { name, exact: true }).click();
   const checkbox = page.getByRole('checkbox', { name: 'erledigt', exact: true });
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
@@ -209,12 +213,13 @@ test('kurzer Strg+G-Sprung zählt nicht; ununterbrochene Sichtbarkeit und Notizb
   const name = 'Besuchsregel'; const lecture = lectureId(`module/ids/${name}.pdf`);
   await writeFile(join(root, 'module', 'ids', `${name}.pdf`), lecturePdf(20));
   const maximum = async () => (await (await request.get(`${baseURL}/api/lectures/${lecture}`)).json()).state.maxPageVisited as number;
-  await page.goto(baseURL); await page.getByRole('link', { name, exact: true }).click();
+  await page.goto(baseURL); await expandModule(page); await page.getByRole('link', { name, exact: true }).click();
   await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
   await goTo(page, 18); await goTo(page, 1);
   await page.getByRole('link', { name: '← Übersicht' }).click();
   await expect(page.getByRole('heading', { name: 'Moduldokumentation', exact: true })).toBeVisible();
   expect(await maximum()).toBeLessThan(18);
+  await expandModule(page);
   const row = page.locator('.lectures li').filter({ has: page.getByRole('link', { name, exact: true }) });
   const titleBox = await row.locator('.lecture-title').boundingBox(); const progressBox = await row.locator('.lecture-progress').boundingBox();
   expect(progressBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);

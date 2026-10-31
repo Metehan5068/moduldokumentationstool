@@ -194,11 +194,15 @@ wie Notizen und Metadaten geschrieben. Zeitstempel verhindern, dass verspätete
 Requests neuere Positionen überschreiben. Fehler erscheinen separat von
 Notiz-Speicherfehlern und können erneut versucht werden.
 
-Der Haken „erledigt“ speichert eine manuelle Markierung in `meta.json`. Er setzt
-keine besuchte Seite voraus und bleibt bei erneutem Scan erhalten. Ein Fehler
+Der Haken „erledigt“ speichert eine manuelle Markierung in `meta.json` und setzt
+den Fortschritt auf alle Folien, ohne Leseposition oder Cursor zu verschieben.
+Die Markierung bleibt bei erneutem Scan erhalten; Abwählen verringert den Fortschritt nicht. Ein Fehler
 setzt den Haken zurück und zeigt eine Meldung. Die Startseite zeigt die höchste
-besuchte Folie getrennt von der Zahl nicht-leerer Notizen sowie unter „Weiter mit“
-die zuletzt geöffnete oder bearbeitete Vorlesung. Zurückscrollen verringert den
+besuchte Folie getrennt von der Zahl „Notizen mit Inhalt“; erledigte Vorlesungen
+zeigen ausdrücklich alle Folien als erledigt. Leere Notizfelder zählen nicht als
+Notiz und bedeuten bei gesetztem Haken keine fehlende Bearbeitung. Unter „Weiter mit“
+steht nur die zuletzt geöffnete oder bearbeitete, noch nicht erledigte Vorlesung.
+Erledigte Vorlesungen bleiben über die Modulliste zugänglich. Zurückscrollen verringert den
 Fortschritt nicht. Eine Folie zählt erst nach mindestens drei Sekunden
 ununterbrochener Sichtbarkeit im sichtbaren Tab oder sobald ihre Notiz bearbeitet
 wurde. Kurzes Durchscrollen, Fokus und Sprünge per `Strg+G` zählen allein nicht.

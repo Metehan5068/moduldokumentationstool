@@ -15,6 +15,7 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
   const [confirmation, setConfirmation] = useState<{ text: string; conflict: typeof draft.conflict }>();
   const [copyRequest, setCopyRequest] = useState<{ text: string; conflict: typeof draft.conflict }>();
   const [relevanceError, setRelevanceError] = useState<string>();
+  const [mathHint, setMathHint] = useState<string>();
   const locallyEdited = useRef<string | undefined>(undefined);
   const focusAfterChange = useRef(false);
   const proxy = useMemo<NoteEditorHandle>(() => ({
@@ -29,6 +30,7 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
   }), [session, page]);
   useLayoutEffect(() => { editorRef?.(proxy); return () => editorRef?.(null); }, [proxy]);
   useLayoutEffect(() => {
+    setMathHint(undefined);
     if (locallyEdited.current === draft.text) locallyEdited.current = undefined;
     else {
       const next = isIrrelevantNote(draft.text);
@@ -62,6 +64,15 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
           const current = session.get(page);
           setCopyRequest({ text: current.text, conflict: current.conflict });
         }}>Kopieren</button>
+      <button type="button" aria-label={`Kompilieren: ${label}`} disabled={irrelevant || Boolean(session.readOnlyError)}
+        onMouseDown={(event) => event.preventDefault()} onClick={() => {
+          if (irrelevant || session.readOnlyError) return;
+          const result = field.current?.compileMath?.();
+          if (!result) return;
+          setMathHint(result.failed
+            ? `${result.failed} Formel(n) konnten nicht kompiliert werden. Der Quelltext bleibt sichtbar; du kannst weiterarbeiten.`
+            : result.formulas.length ? 'Formeln kompiliert. Zum Bearbeiten eine Formel anklicken. Nach Änderungen erneut kompilieren.' : 'Keine Formeln zwischen Dollarzeichen gefunden.');
+        }}>Kompilieren</button>
       <button type="button" aria-pressed={bullets} aria-label={`Stichpunkte: ${label}`} disabled={irrelevant || Boolean(session.readOnlyError)}
         onMouseDown={(event) => event.preventDefault()} onClick={() => {
           const element = field.current!;
@@ -69,7 +80,12 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
             const edit = enableBullets(element.value, element.selectionStart, element.selectionEnd);
             setBullets(true);
             if (edit) applyEdit(edit);
-          } else setBullets(false);
+          } else {
+            setBullets(false);
+            if (element.value.trim() === '-') {
+              applyEdit({ start: 0, end: element.value.length, text: '', selectionStart: 0, selectionEnd: 0 });
+            }
+          }
           element.focus({ preventScroll: true });
         }}>Stichpunkte</button>
       <button type="button" aria-pressed={irrelevant} aria-label={`Nicht relevant: ${label}`} disabled={Boolean(session.readOnlyError)}
@@ -83,7 +99,8 @@ export function NoteField({ session, page, id, label, editorRef, onFocus }: {
         }}>Nicht relevant</button></div>
     </div>
     {relevanceError && <p role="alert" className="bad">{relevanceError}</p>}
-    {bullets && !irrelevant && <p className="bullet-hint" id={`${id}-bullet-help`}>Enter: nächster Punkt · Tab / Umschalt+Tab: ein-/ausrücken · Rücktaste im leeren Punkt: ausrücken, oben ohne Wirkung · Umschalt+Enter: Zeilenumbruch · Stichpunkte erneut anklicken: Modus beenden · Esc: Feld verlassen</p>}
+    {mathHint && <p className="math-hint" role="status">{mathHint}</p>}
+    {bullets && !irrelevant && <p className="bullet-hint" id={`${id}-bullet-help`}>Enter: nächster Punkt · Tab / Umschalt+Tab: ein-/ausrücken · Rücktaste im leeren Punkt: ausrücken, auf oberster Ebene zur vorherigen Zeile (erste Zeile bleibt) · Umschalt+Enter: Zeilenumbruch · Stichpunkte erneut anklicken: Modus beenden · Esc: Feld verlassen</p>}
     {irrelevant ? <IrrelevantNote id={id} label={label} value={draft.text} editorRef={(element) => { field.current = element; }} onFocus={onFocus} onBlur={() => { void session.save(page); }} /> :
     <NoteEditor id={id} label={label} editorRef={(element) => { field.current = element; }} onFocus={onFocus} value={draft.text} readOnly={Boolean(session.readOnlyError)}
       describedBy={bullets ? `${id}-bullet-help` : undefined}

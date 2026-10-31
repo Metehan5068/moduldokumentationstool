@@ -4,6 +4,7 @@ import { normalizeState } from '../shared/state';
 import { PositionSession } from './position-session';
 import { VisitTracker } from './visit-tracker';
 import type { NoteEditorHandle } from './NoteEditor';
+import { isAtScrollEnd } from './lecture-scroll';
 
 type Elements = {
   scroll: RefObject<HTMLDivElement | null>;
@@ -67,7 +68,7 @@ export function useLecturePosition(id: string, initial: LectureState | undefined
     const note = notes.current[saved.activeNotePage - 1];
     note?.focus({ preventScroll: true });
     note?.setSelectionRange(Math.min(saved.selection.start, note.value.length), Math.min(saved.selection.end, note.value.length));
-    onPage(saved.lastPage);
+    onPage(isAtScrollEnd(container) ? pageCount : saved.lastPage);
     ready.current = true;
     capture();
     // Auch Öffnen ohne weiteres Scrollen zählt als letzte Aktivität.

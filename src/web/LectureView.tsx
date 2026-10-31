@@ -8,6 +8,7 @@ import { NotesSession, statusText } from './notes-session';
 import { useLecturePosition } from './use-lecture-position';
 import { NoteField } from './NoteField';
 import type { NoteEditorHandle } from './NoteEditor';
+import { isAtScrollEnd } from './lecture-scroll';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 const SPLIT_KEY = 'lecture-column-ratio';
@@ -131,7 +132,7 @@ export function LectureView({ id, registerGuard }: { id: string; registerGuard: 
       frame = requestAnimationFrame(() => {
         frame = 0;
         const top = container.getBoundingClientRect().top + 24;
-        const index = rows.current.findIndex((row) => row && row.getBoundingClientRect().bottom > top);
+        const index = isAtScrollEnd(container) ? loaded.pdf.numPages - 1 : rows.current.findIndex((row) => row && row.getBoundingClientRect().bottom > top);
         if (index >= 0) { setCurrentPage(index + 1); if (!notes.current.some((note) => note?.contains(document.activeElement))) activePage.current = index + 1; }
       });
     };

@@ -179,7 +179,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
         noteCount: pageNotes ? Object.values(pageNotes).filter((note) => note.text.length > 0).length : null,
         ...(bookmark.exists ? { updatedAt: bookmark.state.updatedAt } : {}),
       };
-      if (bookmark.exists && summary.pageCount !== null && (!result.resume || Date.parse(bookmark.state.updatedAt) > Date.parse(result.resume.updatedAt))) {
+      if (!completed && bookmark.exists && summary.pageCount !== null && (!result.resume || Date.parse(bookmark.state.updatedAt) > Date.parse(result.resume.updatedAt))) {
         result.resume = { id: summary.id, title: summary.title, module: module.name, pageCount: summary.pageCount, lastPage: bookmark.state.lastPage, updatedAt: bookmark.state.updatedAt };
       }
     }

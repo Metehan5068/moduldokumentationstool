@@ -1,3 +1,4 @@
+import { expandModule } from './overview';
 import { expectEditorText, setEditorSelection, editorSelection } from './editor';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -37,7 +38,7 @@ test.afterAll(async () => {
   if (root) await rm(root, { recursive: true, force: true });
 });
 async function openLecture(page: Page) {
-  await page.goto(baseURL);
+  await page.goto(baseURL); await expandModule(page);
   await page.getByRole('link', { name: lectureTitle, exact: true }).click();
   await expect(page.locator('.slide-row')).toHaveCount(132);
   await expect(page.locator('canvas[data-rendered=true]:visible').first()).toBeVisible();
@@ -49,6 +50,68 @@ async function jump(page: Page, number: number) {
   await expect(page.getByLabel(`Notiz zu Folie ${number}`, { exact: true })).toBeFocused();
   await expect(page.locator(`[data-page="${number}"] canvas[data-rendered=true]`)).toBeVisible();
 }
+
+test('Modullisten: standardmäßig eingeklappt, unabhängig und per Tastatur bedienbar', async ({ page }) => {
+  await mkdir(join(root, 'module', 'Weitere Themen'), { recursive: true });
+  await mkdir(join(root, 'module', 'Leeres Modul'), { recursive: true });
+  await writeFile(join(root, 'module', 'Weitere Themen', 'Andere Vorlesung.pdf'), lecturePdf(1));
+  await page.goto(baseURL);
+  const first = page.getByRole('region', { name: 'Modul ids', exact: true });
+  const second = page.getByRole('region', { name: 'Modul Weitere Themen', exact: true });
+  const toggle = first.getByRole('button', { name: 'ids', exact: true });
+  const otherToggle = second.getByRole('button', { name: 'Weitere Themen', exact: true });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(otherToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(first.getByRole('link', { name: lectureTitle, exact: true, includeHidden: true })).not.toBeVisible();
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(first.getByRole('link', { name: lectureTitle, exact: true })).toBeVisible();
+  await expect(otherToggle).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('Space');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await otherToggle.click();
+  await expect(otherToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(new URL(page.url()).hash).toBe('');
+  await page.screenshot({ path: 'test-results/module-collapse.png' });
+  const empty = page.getByRole('region', { name: 'Modul Leeres Modul', exact: true });
+  await expect(empty.getByText('Keine PDF-Dateien in diesem Modul.')).not.toBeVisible();
+  await empty.getByRole('button', { name: 'Leeres Modul', exact: true }).click();
+  await expect(empty.getByText('Keine PDF-Dateien in diesem Modul.')).toBeVisible();
+  await second.getByRole('link', { name: 'Andere Vorlesung', exact: true }).click();
+  await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
+  await page.getByRole('link', { name: '← Übersicht' }).click();
+  await expect(otherToggle).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('Kurze Vorlesung: ohne Scrollstrecke beginnt der Zähler bei der ersten Folie', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 4000 });
+  await openNotesLecture(page, 'Alle Folien sichtbar');
+  expect(await page.locator('.lecture-scroll').evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Folie 1 / 4', exact: true })).toBeVisible();
+});
+
+test('Letzte Folie: Zähler am Scrollende und nach erneutem Öffnen vollständig', async ({ page, request }) => {
+  await openLecture(page);
+  const scroll = page.locator('.lecture-scroll');
+  await scroll.focus();
+  await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  // Die kurze letzte Folie erreicht am Scrollende nicht den oberen Rand.
+  expect(await page.locator('[data-page="132"]').evaluate((row) => {
+    const container = row.closest('.lecture-scroll')!;
+    return row.getBoundingClientRect().top > container.getBoundingClientRect().top + 24;
+  })).toBe(true);
+  await expect(page.getByRole('button', { name: 'Folie 132 / 132', exact: true })).toBeVisible();
+  await expect.poll(async () => (await (await request.get(`${baseURL}/api/lectures/${id}`)).json()).state.maxPageVisited, { timeout: 8000 }).toBe(132);
+  await page.getByRole('link', { name: '← Übersicht' }).click();
+  await expandModule(page);
+  await expect(page.locator('.lectures li').filter({ has: page.getByRole('link', { name: lectureTitle, exact: true }) })).toContainText('bis Folie 132/132');
+  await page.getByRole('link', { name: lectureTitle, exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Folie 132 / 132', exact: true })).toBeVisible();
+  await expect.poll(() => scroll.evaluate((element) => Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop))).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('checkbox', { name: 'erledigt', exact: true })).not.toBeChecked();
+});
 
 test('Kopieren: Eingaben prüfen, ungespeicherte Quelle unabhängig übernehmen, Undo und Speichern', async ({ page }) => {
   const path = await openNotesLecture(page, 'Notizkopie Entwurf');
@@ -441,12 +504,12 @@ test('Stichpunkte: Auswahl, Listenebenen, leere Punkte, Rücktaste, Undo und Spe
   await page.keyboard.press('Backspace');
   await expectEditorText(note, '- Alpha Beta\n- \n    - Unterpunkt\n- ');
   await page.keyboard.press('Backspace');
-  await page.keyboard.press('Backspace');
-  const topLevel = '- Alpha Beta\n- \n    - Unterpunkt\n- ';
+  const topLevel = '- Alpha Beta\n- \n    - Unterpunkt';
   await expectEditorText(note, topLevel);
   expect(await editorSelection(note).then(({ start, end }) => [start, end])).toEqual([topLevel.length, topLevel.length]);
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Enter');
+  await page.keyboard.press('Shift+Tab');
   await page.keyboard.type('Prosa');
   await expectEditorText(note, `${topLevel}\n- Prosa`);
   await page.keyboard.press('Shift+Enter');
@@ -482,16 +545,19 @@ test('Stichpunkte: Auswahl, Listenebenen, leere Punkte, Rücktaste, Undo und Spe
   await page.keyboard.press('Control+Shift+z');
   await expectEditorText(note, '- \n- ');
   await page.keyboard.press('Backspace');
-  await expectEditorText(note, '- \n- ');
+  await expectEditorText(note, '- ');
+  expect(await editorSelection(note).then(({ start, end }) => [start, end])).toEqual([2, 2]);
+  await page.keyboard.press('Backspace');
+  await expectEditorText(note, '- ');
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Control+z');
-  await expectEditorText(note, '- \n    - ');
-  await page.keyboard.press('Control+Shift+z');
   await expectEditorText(note, '- \n- ');
+  await page.keyboard.press('Control+Shift+z');
+  await expectEditorText(note, '- ');
   await setEditorSelection(note, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
   await page.keyboard.type('Text');
   await page.keyboard.press('Backspace');
-  await expectEditorText(note, '- \n- Tex');
+  await expectEditorText(note, '- Tex');
 
   // One native transaction for a multi-line indent; undo restores content and autosave state.
   const original = '- Alpha\n- Beta\nProsa';
@@ -530,6 +596,105 @@ test('Stichpunkte: Auswahl, Listenebenen, leere Punkte, Rücktaste, Undo und Spe
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('Stichpunkte deaktivieren: einzelnen leeren Punkt entfernen, Undo und Inhalt erhalten', async ({ page }) => {
+  const path = await openNotesLecture(page, 'Leeren Stichpunkt entfernen');
+  const note = page.getByLabel('Notiz zu Folie 1', { exact: true });
+  const toggle = page.getByRole('button', { name: 'Stichpunkte: Notiz zu Folie 1', exact: true });
+  await note.fill('Ausgangstext');
+  await page.keyboard.press('Control+s');
+  await expect(savedStatus(page)).toHaveText('Gespeichert');
+  expect(parseNotes(await readFile(path, 'utf8')).notes[1]).toBe('Ausgangstext');
+  for (const value of ['- ', '-', '    -   ']) {
+    await toggle.click();
+    await note.fill(value);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expectEditorText(note, '');
+    expect(await editorSelection(note).then(({ start, end }) => [start, end])).toEqual([0, 0]);
+    await page.keyboard.press('Control+z');
+    await expectEditorText(note, value);
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await page.keyboard.press('Control+Shift+z');
+    await expectEditorText(note, '');
+  }
+  await page.keyboard.press('Control+s');
+  await expect(savedStatus(page)).toHaveText('Gespeichert');
+  expect(parseNotes(await readFile(path, 'utf8')).notes[1] ?? '').toBe('');
+  await page.reload();
+  await expectEditorText(note, '');
+  for (const value of ['- Text', '- \n- ', 'Prosa\n- ']) {
+    await toggle.click();
+    await note.fill(value);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expectEditorText(note, value);
+  }
+});
+
+test('LaTeX: Formeln kompilieren, Hinweise, Quelltext speichern und Stichpunkte bearbeiten', async ({ page }) => {
+  const path = await openNotesLecture(page, 'LaTeX-Formeln');
+  const note = page.getByLabel('Notiz zu Folie 1', { exact: true });
+  const compile = page.getByRole('button', { name: 'Kompilieren: Notiz zu Folie 1', exact: true });
+  const bullets = page.getByRole('button', { name: 'Stichpunkte: Notiz zu Folie 1', exact: true });
+  const actions = page.locator('[data-page="1"] .note-field-actions button');
+  await expect(actions.nth(0)).toHaveText('Kopieren');
+  await expect(actions.nth(1)).toHaveText('Kompilieren');
+  const source = String.raw`Bruch $\frac{1}{2}$ und $x^2$`;
+  await note.fill(source);
+  await compile.click();
+  await expect(note.locator('.note-formula')).toHaveCount(2);
+  await expect(note.locator('.katex')).toHaveCount(2);
+  await expectEditorText(note, source);
+  await page.keyboard.press('Control+s');
+  await expect(savedStatus(page)).toHaveText('Gespeichert');
+  await expect(note.locator('.katex')).toHaveCount(2);
+  expect(parseNotes(await readFile(path, 'utf8')).notes[1]).toBe(source);
+  await page.reload();
+  await expectEditorText(note, source);
+  await compile.click();
+  await note.locator('.note-formula').first().click();
+  await expect(note.locator('.note-formula')).toHaveCount(0);
+  await page.keyboard.type('2');
+  await expectEditorText(note, String.raw`Bruch $2\frac{1}{2}$ und $x^2$`);
+  await page.keyboard.press('Control+z');
+  await expectEditorText(note, source);
+
+  const mixed = String.raw`$x$ und $\unbekannt$ und $offen`;
+  await note.fill(mixed);
+  await compile.click();
+  await expect(note.locator('.katex')).toHaveCount(1);
+  await expect(page.getByRole('status').filter({ hasText: 'konnten nicht kompiliert' })).toBeVisible();
+  await expectEditorText(note, mixed);
+  await note.fill('Nur Text');
+  await compile.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Keine Formeln' })).toBeVisible();
+
+  await note.fill(String.raw`- Formel $x^2$`);
+  await bullets.click();
+  await compile.click();
+  await expect(note.locator('.katex')).toHaveCount(1);
+  await expect(bullets).toHaveAttribute('aria-pressed', 'true');
+  await note.focus();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  await expectEditorText(note, '- Formel $x^2$\n    - ');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await expectEditorText(note, '- Formel $x^2$');
+  await expect(bullets).toHaveAttribute('aria-pressed', 'true');
+  const multiline = '- Bruch $\\frac{1}{2}$\n- Summe $$\\sum_{i=1}^{n}\ni^2$$';
+  await note.fill(multiline);
+  await compile.click();
+  await expect(note.locator('.katex')).toHaveCount(2);
+  await expect(note.locator('.katex-display')).toHaveCount(1);
+  await expectEditorText(note, multiline);
+  await note.screenshot({ path: 'test-results/latex-preview.png' });
+  await note.locator('.note-formula').last().click();
+  await expect(note.locator('.note-formula')).toHaveCount(0);
+  await expectEditorText(note, multiline);
+});
+
 test('Zoom neben Notizen: stabile Zeile, scharfer Ausschnitt, unabhängige Folien und Lazy-Rendering', async ({ page }) => {
   await openLecture(page);
   const row = page.locator('[data-page="1"]');
@@ -541,7 +706,7 @@ test('Zoom neben Notizen: stabile Zeile, scharfer Ausschnitt, unabhängige Folie
   await page.screenshot({ path: 'test-results/inline-zoom-fit.png' });
   for (let i = 0; i < 4; i++) await row.getByRole('button', { name: 'Folie 1 hineinzoomen', exact: true }).click();
   await expect(row.getByLabel('Vergrößerung Folie 1', { exact: true })).toHaveText('200 %');
-  await expect.poll(async () => (await row.locator('canvas[data-rendered=true]').boundingBox())!.width).toBeGreaterThan(initialCanvas!.width * 1.9);
+  await expect.poll(async () => (await row.locator('canvas[data-rendered=true]').boundingBox())?.width ?? 0).toBeGreaterThan(initialCanvas!.width * 1.9);
   const bitmap = await row.locator('canvas[data-rendered=true]').evaluate((element) => ({ pixels: (element as HTMLCanvasElement).width, css: element.getBoundingClientRect().width }));
   expect(Math.abs(bitmap.pixels - bitmap.css)).toBeLessThanOrEqual(2);
   expect((await row.boundingBox())!.height).toBe(initialRow!.height);
@@ -601,7 +766,7 @@ test('Folien-Detailansicht: scharfer Zoom, Verschieben, Zurückzoomen und Rückk
   await page.screenshot({ path: 'test-results/slide-zoom-fit.png' });
   for (let i = 0; i < 4; i++) await dialog.getByRole('button', { name: 'Vergrößern', exact: true }).click();
   await expect(dialog.getByLabel('Vergrößerung')).toHaveText('200 %');
-  await expect.poll(async () => (await canvas.boundingBox())!.width).toBeCloseTo(fit!.width * 2, 0);
+  await expect.poll(async () => (await canvas.boundingBox())?.width ?? 0).toBeCloseTo(fit!.width * 2, 0);
   const bitmap = await canvas.evaluate((element) => ({ pixels: (element as HTMLCanvasElement).width, css: element.getBoundingClientRect().width }));
   expect(Math.abs(bitmap.pixels - bitmap.css)).toBeLessThanOrEqual(2);
   const initialPan = await viewport.evaluate((element) => ({ x: element.scrollLeft, y: element.scrollTop }));
@@ -778,7 +943,7 @@ test('direkter Einstieg, HiDPI und Resize rendern scharf; unbekannte IDs zeigen 
 
 async function openNotesLecture(page: Page, title: string) {
   await writeFile(join(root, 'module', 'ids', `${title}.pdf`), lecturePdf(4));
-  await page.goto(baseURL);
+  await page.goto(baseURL); await expandModule(page);
   await page.getByRole('link', { name: title, exact: true }).click();
   await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
   return join(root, 'notes', 'ids', title, 'notes.md');

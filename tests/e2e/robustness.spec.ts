@@ -1,3 +1,4 @@
+import { expandModule } from './overview';
 import { expectEditorText } from './editor';
 import { mkdtemp, mkdir, readFile, readdir, rm, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -19,7 +20,7 @@ const pdf = (name: string) => join(root, 'module', 'ids', `${name}.pdf`);
 const notes = (name: string) => join(root, 'notes', 'ids', name, 'notes.md');
 async function open(page: Page, name: string, count = 3) {
   await writeFile(pdf(name), textPdf(Array.from({ length: count }, (_, index) => [`${name} Thema ${index + 1}`])));
-  await page.goto(baseURL); await page.getByRole('link', { name, exact: true }).click();
+  await page.goto(baseURL); await expandModule(page); await page.getByRole('link', { name, exact: true }).click();
   await expect(page.getByLabel('Notiz zu Folie 1', { exact: true })).toBeFocused();
 }
 async function note(page: Page, number: number, text: string) {
@@ -55,7 +56,7 @@ test('umbenannte PDF wird per Hash vorgeschlagen und ausdrücklich mit erhaltene
   const old = 'Vor Umbenennung'; const next = 'Nach Umbenennung';
   await open(page, old); await note(page, 1, 'Diese Frage bleibt nach Umbenennung erhalten.');
   await page.getByRole('checkbox', { name: 'erledigt', exact: true }).check(); await expect(page.getByRole('checkbox', { name: 'erledigt', exact: true })).toBeEnabled();
-  await page.getByRole('link', { name: '← Übersicht' }).click();
+  await page.getByRole('link', { name: '← Übersicht' }).click(); await expandModule(page);
   await rename(pdf(old), pdf(next)); await page.getByRole('button', { name: 'Neu einlesen', exact: true }).click();
   const section = page.getByRole('region', { name: 'Notizen ohne PDF', exact: true });
   const row = section.locator('li').filter({ hasText: `ids/${old}` }); await expect(row).toContainText('umbenannt?');
@@ -71,8 +72,8 @@ test('umbenannte PDF wird per Hash vorgeschlagen und ausdrücklich mit erhaltene
 
 test('gelöschte PDF bleibt als verwaiste Notiz sichtbar; belegte Ziele werden nicht überschrieben', async ({ page }) => {
   const old = 'Gelöschte PDF'; const target = 'Schon belegtes Ziel';
-  await open(page, old); await note(page, 1, 'Originalnotiz'); await page.getByRole('link', { name: '← Übersicht' }).click();
-  await open(page, target); await note(page, 1, 'Zielnotiz'); await page.getByRole('link', { name: '← Übersicht' }).click();
+  await open(page, old); await note(page, 1, 'Originalnotiz'); await page.getByRole('link', { name: '← Übersicht' }).click(); await expandModule(page);
+  await open(page, target); await note(page, 1, 'Zielnotiz'); await page.getByRole('link', { name: '← Übersicht' }).click(); await expandModule(page);
   await rm(pdf(old)); await page.getByRole('button', { name: 'Neu einlesen', exact: true }).click();
   const row = page.getByRole('region', { name: 'Notizen ohne PDF', exact: true }).locator('li').filter({ hasText: `ids/${old}` });
   await row.getByRole('button', { name: 'Mit PDF verknüpfen…', exact: true }).click();

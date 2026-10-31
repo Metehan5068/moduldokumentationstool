@@ -44,6 +44,7 @@ export function bulletKeyEdit(value: string, start: number, end: number, key: st
       const removed = outdentLength(indent);
       return { start: lineStart, end: lineStart + removed, text: '', selectionStart: start - removed, selectionEnd: end - removed };
     }
+    if (lineStart > 0) return replace(lineStart - 1, lineStart + line.length, '');
     return { start, end, text: '', selectionStart: start, selectionEnd: end };
   }
   if (key !== 'Enter') return;

@@ -94,6 +94,10 @@ h1 { font-size: 24px; margin: 0 0 var(--s5); }
 .resume-card a { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--s4); border-radius: var(--r-sm); font-size: 13px; font-weight: 500; text-decoration: none; }
 .module { margin: var(--s6) 0; }
 .module h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 var(--s3); }
+.module-toggle { display: inline-flex; align-items: center; gap: var(--s2); padding: 4px 0; border: 0; background: transparent; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; }
+.module-toggle:hover { color: var(--fg); background: transparent; }
+.module-arrow { display: inline-block; font-size: 9px; transition: transform var(--ease); }
+.module-toggle[aria-expanded="true"] .module-arrow { transform: rotate(90deg); }
 .lectures { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
 .lectures li { padding: var(--s3) var(--s4); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s1) var(--s5); align-items: baseline; transition: background var(--ease); }
 .lectures li:hover { background: var(--surface-2); }
@@ -169,6 +173,10 @@ h1 { font-size: 24px; margin: 0 0 var(--s5); }
 .note-editor .cm-placeholder { color: var(--subtle); }
 .note-card textarea { width: 100%; flex: 1; min-height: 100px; resize: none; line-height: 1.6; overflow-y: auto; }
 .bullet-hint { margin: 0 0 var(--s2); color: var(--subtle); font-size: 12px; }
+.math-hint { margin: 0 0 var(--s2); color: var(--subtle); font-size: 12px; }
+.note-formula { display: inline-block; max-width: 100%; vertical-align: baseline; cursor: text; text-indent: 0; }
+.note-formula .katex { font-size: 1.1em; }
+.note-formula .katex-display { display: inline-block; max-width: 100%; margin: 0; vertical-align: middle; overflow-x: auto; }
 .irrelevant-note { display: flex; align-items: center; justify-content: center; padding: var(--s5); text-align: center; background: transparent; border-style: dashed; border-color: var(--border-strong); }
 .irrelevant-note p { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--subtle); }
 .irrelevant-note:focus-visible { outline: none; }

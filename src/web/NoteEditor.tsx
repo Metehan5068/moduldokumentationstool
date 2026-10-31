@@ -3,6 +3,8 @@ import { Compartment, EditorState, Prec, Transaction } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, keymap, placeholder, type DecorationSet, type KeyBinding, type ViewUpdate } from '@codemirror/view';
 import { history, historyKeymap, standardKeymap, insertNewline, isolateHistory, redo, undo } from '@codemirror/commands';
 import type { BulletEdit } from './bullet-edit';
+import { compileMath, type MathCompilation } from './math-compile';
+import { hideMath, mathPreview, showMath } from './math-preview';
 
 export interface NoteEditorHandle {
   readonly element: HTMLElement;
@@ -13,6 +15,7 @@ export interface NoteEditorHandle {
   setSelectionRange(start: number, end: number): void;
   contains(target: EventTarget | null): boolean;
   applyEdit(edit: BulletEdit): void;
+  compileMath?(): MathCompilation;
 }
 
 /** Line decorations change presentation only; the document keeps every original character. */
@@ -114,13 +117,19 @@ export function NoteEditor({ id, label, value, readOnly, describedBy, editorRef,
       applyEdit(edit) {
         mount().dispatch({ changes: { from: edit.start, to: edit.end, insert: edit.text }, selection: { anchor: edit.selectionStart, head: edit.selectionEnd }, annotations: [Transaction.userEvent.of('input.list'), isolateHistory.of('full')], scrollIntoView: true });
       },
+      compileMath() {
+        const editor = mount();
+        const result = compileMath(editor.state.doc.toString());
+        editor.dispatch({ effects: showMath.of(result.formulas) });
+        return result;
+      },
     };
     const mount = () => {
       if (view) return view;
       unschedule(element);
       const { value, readOnly } = props.current;
       const created: EditorView = view = new EditorView({ parent: element, state: EditorState.create({ doc: value, extensions: [
-      EditorView.lineWrapping, EditorState.tabSize.of(4), undoHistory.current.of(history()), hangingIndent,
+      EditorView.lineWrapping, EditorState.tabSize.of(4), undoHistory.current.of(history()), hangingIndent, mathPreview,
       access.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
       attributes.current.of(contentAttributes()), placeholder('Deine Notiz …'),
       // Plain newlines outside list mode; Tab keeps its ordinary focus-navigation behavior.
@@ -129,6 +138,9 @@ export function NoteEditor({ id, label, value, readOnly, describedBy, editorRef,
         keydown: (event, editor) => {
           composingKey = event.isComposing || event.keyCode === 229;
           if (composingKey) return false;
+          // Reveal source before keyboard editing/navigation; commands keep their normal text semantics.
+          const keepPreview = (event.ctrlKey || event.metaKey) && ['s', 'c'].includes(event.key.toLowerCase());
+          if (!keepPreview && editor.state.field(mathPreview).size && !['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) editor.dispatch({ effects: hideMath.of(null) });
           // Accept both upper/lower-case key values emitted by keyboard layouts and automation.
           if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'z') {
             event.preventDefault(); if (!editor.state.readOnly) (event.shiftKey ? redo : undo)(editor); return true;

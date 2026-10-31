@@ -1,3 +1,4 @@
+import { expandModule } from './overview';
 import { copyFile, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
@@ -26,7 +27,7 @@ test.afterAll(async () => { await app?.close(); if (root) await rm(root, { recur
 
 test('Phase-5-Abnahme: offene Fragen und zugehörige Folientexte sind anhand der Dateien mit Fundstellen lesbar', async ({ page }) => {
   const external: string[] = []; page.on('request', (request) => { if (/^https?:/.test(request.url()) && !request.url().startsWith(baseURL)) external.push(request.url()); });
-  await page.goto(baseURL); await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
+  await page.goto(baseURL); await expandModule(page); await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
   const directory = join(root, 'notes', 'ids', title); const sourcePath = join(directory, 'source.md');
   await expect.poll(async () => { try { return await readFile(sourcePath, 'utf8'); } catch { return ''; } }).toContain('Entropy measures impurity.');
   await expect.poll(async () => { try { return await readFile(join(root, 'notes', 'ids', 'IDS-4-Regression', 'source.md'), 'utf8'); } catch { return ''; } }).toContain('Linear Regression');
@@ -48,7 +49,7 @@ test('Phase-5-Abnahme: offene Fragen und zugehörige Folientexte sind anhand der
   await page.keyboard.press('Control+s'); await expect(page.locator('.lecture-toolbar [role=status]')).toHaveText('Gespeichert');
   expect(await readFile(join(directory, 'notes.md'), 'utf8')).toContain('## Folie 2 · Pruning');
   await expect.poll(() => readFile(join(root, 'INDEX.md'), 'utf8')).toContain('| 3 | 2 | bis Folie 2 |');
-  await page.getByRole('link', { name: '← Übersicht' }).click();
+  await page.getByRole('link', { name: '← Übersicht' }).click(); await expandModule(page);
   for (const width of [1440, 650]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const row of await page.locator('.lectures li').all()) {
