@@ -9,6 +9,7 @@ import { loadConfig } from '../../src/server/config';
 import { lectureId } from '../../src/server/registry';
 import { lecturePdf } from '../fixtures/pdf';
 import { newNotes, parseNotes, serializeNotes } from '../../src/shared/notes';
+import type { OverviewResponse } from '../../src/shared/api';
 
 let root: string;
 let app: FastifyInstance;
@@ -50,6 +51,38 @@ async function jump(page: Page, number: number) {
   await expect(page.getByLabel(`Notiz zu Folie ${number}`, { exact: true })).toBeFocused();
   await expect(page.locator(`[data-page="${number}"] canvas[data-rendered=true]`)).toBeVisible();
 }
+
+test('Modul erledigt: grünes Häkchen nur bei vollständig erledigtem Ordner, auch eingeklappt', async ({ page }) => {
+  const lecture = (id: string, completed: boolean) => ({ id, title: id, pageCount: 1,
+    progress: { completed, maxPageVisited: completed ? 1 : 0, lastPage: 1, noteCount: 0 } });
+  const overview: OverviewResponse = { modules: [
+    { name: 'ids', lectures: [lecture('eins', true), lecture('zwei', true)] },
+    { name: 'Teilweise', lectures: [lecture('drei', true), lecture('vier', false)] },
+    { name: 'Ohne Status', lectures: [{ id: 'fuenf', title: 'fuenf', pageCount: 1 }] },
+    { name: 'Leer', lectures: [] },
+  ] };
+  for (const endpoint of ['**/api/overview', '**/api/rescan']) {
+    await page.route(endpoint, (route) => route.fulfill({ json: overview }));
+  }
+  await page.goto(baseURL);
+  const module = page.getByRole('region', { name: 'Modul ids', exact: true });
+  const toggle = module.getByRole('button', { name: 'ids', exact: true });
+  const check = module.getByRole('img', { name: 'Alle Vorlesungen erledigt', exact: true });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(check).toBeVisible();
+  await expect(check).toHaveCSS('color', 'rgb(0, 255, 65)');
+  const titleBox = (await toggle.boundingBox())!;
+  expect((await check.boundingBox())!.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+  await expect(page.getByRole('img', { name: 'Alle Vorlesungen erledigt', exact: true })).toHaveCount(1);
+  await page.screenshot({ path: 'test-results/module-completed.png' });
+  await toggle.click();
+  await expect(check).toBeVisible();
+  await toggle.click();
+  overview.modules[0]!.lectures[1]!.progress!.completed = false;
+  await page.getByRole('button', { name: 'Neu einlesen', exact: true }).click();
+  await expect(check).toHaveCount(0);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+});
 
 test('Modullisten: standardmäßig eingeklappt, unabhängig und per Tastatur bedienbar', async ({ page }) => {
   await mkdir(join(root, 'module', 'Weitere Themen'), { recursive: true });

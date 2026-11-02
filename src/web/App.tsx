@@ -68,7 +68,10 @@ function Overview() {
                 const next = new Set(previous);
                 if (next.has(module.name)) next.delete(module.name); else next.add(module.name);
                 return next;
-              })}><span className="module-arrow" aria-hidden="true">▶</span>{module.name}</button></h2>
+              })}><span className="module-arrow" aria-hidden="true">▶</span>{module.name}</button>
+              {module.lectures.length > 0 && module.lectures.every((lecture) => lecture.progress?.completed === true) &&
+                <span className="completed-check" role="img" aria-label="Alle Vorlesungen erledigt" title="Alle Vorlesungen erledigt">✓</span>}
+            </h2>
             <div id={`module-lectures-${encodeURIComponent(module.name)}`} hidden={!expandedModules.has(module.name)}>
             {module.lectures.length === 0 ? <p className="empty">Keine PDF-Dateien in diesem Modul.</p> : (
               <ul className="lectures">

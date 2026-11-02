@@ -93,7 +93,7 @@ h1 { font-size: 24px; margin: 0 0 var(--s5); }
 .resume-card p { margin: var(--s1) 0 0; color: var(--muted); font-size: 13px; }
 .resume-card a { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--s4); border-radius: var(--r-sm); font-size: 13px; font-weight: 500; text-decoration: none; }
 .module { margin: var(--s6) 0; }
-.module h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 var(--s3); }
+.module h2 { display: flex; align-items: center; gap: var(--s2); font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 var(--s3); }
 .module-toggle { display: inline-flex; align-items: center; gap: var(--s2); padding: 4px 0; border: 0; background: transparent; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; }
 .module-toggle:hover { color: var(--fg); background: transparent; }
 .module-arrow { display: inline-block; font-size: 9px; transition: transform var(--ease); }
@@ -107,7 +107,7 @@ h1 { font-size: 24px; margin: 0 0 var(--s5); }
 .lecture-title a:hover { color: var(--accent-text); }
 .page-count { white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
 .lecture-progress { grid-column: 1 / -1; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.lecture-progress .completed-check { color: #00ff41; }
+.module .completed-check { color: #00ff41; }
 .source-badge { grid-column: 1 / -1; color: var(--warn); font-size: 12px; }
 .relink-form { grid-column: 1 / -1; display: grid; gap: var(--s3); margin-top: var(--s2); }
 .relink-form select { min-width: 0; width: 100%; }
