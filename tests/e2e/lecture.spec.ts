@@ -728,6 +728,35 @@ test('LaTeX: Formeln kompilieren, Hinweise, Quelltext speichern und Stichpunkte 
   await expectEditorText(note, multiline);
 });
 
+test('LaTeX: Textformatierung in der Doppel-Dollar-Umgebung auch mit Stichpunkten', async ({ page }) => {
+  await openNotesLecture(page, 'LaTeX-Textformatierung');
+  const note = page.getByLabel('Notiz zu Folie 1', { exact: true });
+  const bullets = page.getByRole('button', { name: 'Stichpunkte: Notiz zu Folie 1', exact: true });
+  const source = String.raw`- $$\textbf{Größe und $x^2$}$$
+- $$\textit{Überwachtes Lernen}$$
+- $$\textbf{Text mit \textit{Betonung}}$$
+- $\textbf{PF\_* = AF\_*}$`;
+  await note.fill(source);
+  await bullets.click();
+  await page.getByRole('button', { name: 'Kompilieren: Notiz zu Folie 1', exact: true }).click();
+  await expect(note.locator('.katex-display')).toHaveCount(3);
+  await expect(note.locator('.katex .textbf').first()).toHaveCSS('font-weight', '700');
+  await expect(note.locator('.katex .textit').first()).toHaveCSS('font-style', 'italic');
+  await expect(note.locator('.katex .textbf.textit').first()).toHaveCSS('font-weight', '700');
+  await expect(note.locator('.katex .textbf.textit').first()).toHaveCSS('font-style', 'italic');
+  const literalText = note.locator('.katex-html .textbf').filter({ hasText: 'PF_* = AF_*' });
+  await expect(literalText).toHaveText('PF_* = AF_*');
+  await expect(literalText).toHaveCSS('font-weight', '700');
+  await expectEditorText(note, source);
+  await expect(bullets).toHaveAttribute('aria-pressed', 'true');
+  await note.screenshot({ path: 'test-results/latex-textformat.png' });
+  await note.fill(String.raw`$\textbf{PF_* = AF_*}$`);
+  await page.getByRole('button', { name: 'Kompilieren: Notiz zu Folie 1', exact: true }).click();
+  await expect(note.locator('.katex')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'konnten nicht kompiliert' })).toBeVisible();
+  await expectEditorText(note, String.raw`$\textbf{PF_* = AF_*}$`);
+});
+
 test('Zoom neben Notizen: stabile Zeile, scharfer Ausschnitt, unabhängige Folien und Lazy-Rendering', async ({ page }) => {
   await openLecture(page);
   const row = page.locator('[data-page="1"]');
