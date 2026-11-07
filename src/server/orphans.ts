@@ -11,7 +11,7 @@ import type { OrphanSummary } from '../shared/api.js';
 
 type Lecture = NonNullable<ReturnType<Registry['get']>>;
 interface Orphan { id: string; module: string; title: string; directory: string }
-const reserved = new Set(['.relink-backups', '.relink-staging']);
+const reserved = new Set(['.relink-backups', '.relink-staging', '.documents']);
 export class RelinkError extends Error { constructor(message: string, readonly status = 409) { super(message); } }
 export class OrphanService {
   constructor(private readonly config: AppConfig, private readonly registry: Registry, private readonly writes: WriteQueue, private readonly logger: Pick<FastifyBaseLogger, 'error'>) {}

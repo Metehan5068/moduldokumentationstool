@@ -21,10 +21,20 @@
     "@codemirror/view": "^6.43.15",
     "@fastify/static": "^10.1.8",
     "fastify": "^5.12.7",
+    "github-slugger": "^2.0.0",
     "katex": "^0.19.1",
+    "mermaid": "^12.3.0",
     "pdfjs-dist": "^6.4.299",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

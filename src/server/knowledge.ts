@@ -19,6 +19,10 @@ const guide = `# Studiennotizen – Hinweise für KI-Agenten
 Die Dateien bleiben lokal. Beantworte Inhaltsfragen mit Fundstelle, z. B. „IDS-3, Folie 12“.
 
 - PDFs liegen unter module/<Modul>/*.pdf. module/ ist schreibgeschützt; PDFs niemals ändern.
+- Cryptography bündelt Whiteboards aus whiteboard/ bzw. Summary/, mini-script.pdf und mds/Lecture N.md.
+  Die Markdown-Lernskripte sind Originaldateien; Citation Contract und Quellen-IDs erhalten.
+  Gemeinsame extrahierte PDF-Texte liegen unter notes/.documents/<Dokument-ID>/source.md,
+  Lecture-Zustände unter notes/Cryptography/Lecture N/. Die PDF-Seiten sind 1-basiert.
 - notes/<Modul>/<Vorlesung>/notes.md enthält die eigenen Notizen und gehört dem Nutzer.
   Nur auf ausdrückliche Bitte ändern. Marker-Zeilen niemals verändern.
   Ein Block <!-- lecture-note:page=N --> bis <!-- /lecture-note --> gehört zu PDF-Seite N (1-basiert).
@@ -51,9 +55,9 @@ export class KnowledgeService {
     private readonly writes: WriteQueue, private readonly notes: NotesStore, private readonly states: StateStore,
     private readonly extract: typeof extractPdf = extractPdf, private readonly getOrphans?: () => Promise<OrphanSummary[]>) {}
 
-  afterScan(lectures: Lecture[]) {
+  afterScan(lectures: Lecture[], documents: Lecture[] = []) {
     this.snapshot = lectures;
-    for (const lecture of lectures) if (lecture.summary.pageCount !== null) this.pending.set(lecture.summary.id, lecture);
+    for (const lecture of [...lectures.filter((l) => !l.crypto), ...documents]) if (lecture.summary.pageCount !== null) this.pending.set(lecture.summary.id, lecture);
     this.start(); this.requestIndex(true);
   }
   private start() {
@@ -148,6 +152,13 @@ export class KnowledgeService {
       const directory = `notes/${module}/${lecture.summary.title}/`;
       const pdf = `module/${relative(this.config.moduleRoot, lecture.pdfPath).replaceAll('\\', '/')}`;
       const progress = completed ? '✓ erledigt' : bookmark.state.maxPageVisited ? `bis Folie ${bookmark.state.maxPageVisited}` : '–';
+      if (lecture.crypto) {
+        const materials = lecture.crypto.documents.filter((doc) => doc.id === lecture.crypto?.whiteboardId || doc.id === lecture.crypto?.scriptId);
+        const links = materials.map((doc) => `[${doc.kind === 'script' ? 'Mini-Skript' : 'Whiteboard'}](${link(`notes/.documents/${doc.id}/source.md`)})`);
+        if (lecture.markdownPath) links.push(`[Lernskript](${link(`module/${relative(this.config.moduleRoot, lecture.markdownPath).replaceAll('\\', '/')}`)})`);
+        lines.push(`| ${cell(lecture.summary.title)} | ${lecture.summary.pageCount ?? '–'} | ${lecture.crypto.markdown !== undefined ? 'Lernskript vorhanden' : 'Lernskript fehlt'} | ${progress} | ${updated ? updated.slice(0, 10) : '–'} | ${links.join(' · ')} |`);
+        continue;
+      }
       lines.push(`| ${cell(lecture.summary.title)} | ${lecture.summary.pageCount ?? 'Fehler beim Einlesen'} | ${notes ? Object.values(notes).filter((note) => note.text.length).length : 'Notizdatei prüfen'} | ${progress} | ${updated ? updated.slice(0, 10) : '–'} | [${cell(directory)}](${link(directory)}) · [PDF](${link(pdf)}) |`);
     }
     if (!lectures.length) lines.push('Noch keine Vorlesungs-PDFs gefunden.');

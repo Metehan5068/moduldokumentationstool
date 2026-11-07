@@ -29,7 +29,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
   app.addHook('onClose', () => knowledge.close());
   async function scanRegistry() {
     const result = await registry.scan();
-    knowledge.afterScan(registry.all());
+    knowledge.afterScan(registry.all(), [...registry.cryptography.documents.values()].map((d) => d.cache));
     return result;
   }
   app.addHook('onReady', async () => {
@@ -52,6 +52,8 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     const lecture = await findLecture(request.params.id);
     if (!lecture) return reply.code(404).send({ error: 'not_found' });
     const [bookmark, completed] = await Promise.all([states.read(lecture), states.completed(lecture)]);
+    if (lecture.crypto) return { ...lecture.summary, module: lecture.module, state: bookmark.state, completed, notes: {}, cryptography: lecture.crypto,
+      ...(bookmark.error ? { stateError: bookmark.error } : {}) };
     const source = await sources.read(lecture).catch((err: unknown) => { request.log.warn({ err }, 'Quellstatus konnte nicht gelesen werden'); return { sourceChanged: false }; });
     const detail = { ...lecture.summary, ...source, module: lecture.module, state: bookmark.state, completed, ...(bookmark.error ? { stateError: bookmark.error } : {}) };
     try {
@@ -69,7 +71,8 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     schema: { body: { type: 'object', additionalProperties: false, required: ['sourceSha256'], properties: { sourceSha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } } } },
   }, async (request, reply) => {
     const lecture = await findLecture(request.params.id); if (!lecture) return reply.code(404).send({ error: 'not_found' });
-    try { const result = await sources.accept(lecture, request.body.sourceSha256); knowledge.afterScan(registry.all()); return result; }
+    if (lecture.crypto) return reply.code(400).send({ error: 'document_required' });
+    try { const result = await sources.accept(lecture, request.body.sourceSha256); knowledge.afterScan(registry.all(), [...registry.cryptography.documents.values()].map((d) => d.cache)); return result; }
     catch (err) {
       if (err instanceof ChangedAgainError) return reply.code(409).send({ error: 'source_changed_again', message: err.message });
       request.log.error({ err }, 'Quellenbestätigung fehlgeschlagen'); return reply.code(500).send({ error: 'save_failed' });
@@ -94,6 +97,14 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
       required: ['schemaVersion', 'lastPage', 'pageOffsetRatio', 'activeNotePage', 'selection', 'maxPageVisited', 'updatedAt'],
       properties: {
         schemaVersion: { const: 1 }, lastPage: { type: 'integer' }, pageOffsetRatio: { type: 'number' }, activeNotePage: { type: 'integer' },
+        reader: { type: 'object', additionalProperties: false, required: ['positions', 'markdownScrollRatio'], properties: {
+          activeDocumentId: { type: 'string', pattern: '^[a-f0-9]{16}$' }, markdownScrollRatio: { type: 'number', minimum: 0, maximum: 1 },
+          positions: { type: 'object', maxProperties: 200, propertyNames: { pattern: '^[a-f0-9]{16}$' }, additionalProperties: {
+            type: 'object', additionalProperties: false, required: ['page', 'offsetRatio'], properties: {
+              page: { type: 'integer', minimum: 1 }, offsetRatio: { type: 'number', minimum: 0, maximum: 1 },
+            },
+          } },
+        } },
         selection: { type: 'object', additionalProperties: false, required: ['start', 'end'], properties: { start: { type: 'integer' }, end: { type: 'integer' } } },
         maxPageVisited: { type: 'integer' }, updatedAt: { type: 'string', format: 'date-time' },
       },
@@ -103,6 +114,12 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     const lecture = await findLecture(request.params.id);
     if (!lecture) return reply.code(404).send({ error: 'not_found' });
     if (lecture.summary.pageCount === null) return reply.code(400).send({ error: 'pdf_unavailable' });
+    if (lecture.crypto && request.body.reader) {
+      const reader = request.body.reader;
+      if ((reader.activeDocumentId && !registry.cryptography.documents.has(reader.activeDocumentId))
+        || Object.entries(reader.positions).some(([id, pos]) => !registry.cryptography.documents.has(id)
+          || pos.page > (registry.cryptography.documents.get(id)?.pageCount ?? 0))) return reply.code(400).send({ error: 'invalid_document_position' });
+    }
     try { const state = await states.write(lecture, request.body); knowledge.requestIndex(); return state; }
     catch (err) { request.log.error({ err, lectureId: request.params.id }, 'Leseposition konnte nicht gespeichert werden'); return reply.code(500).send({ error: 'save_failed' }); }
   });
@@ -127,6 +144,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
     const lecture = await findLecture(request.params.id);
     if (!lecture) return reply.code(404).send({ error: 'not_found' });
     const page = Number(request.params.page);
+    if (lecture.crypto) return reply.code(405).send({ error: 'read_only_lecture' });
     const detached = request.url.split('?')[0]!.includes('/detached-notes/');
     if (!/^[1-9]\d*$/.test(request.params.page) || !Number.isSafeInteger(page) || (!detached && page > (lecture.summary.pageCount ?? 0))) {
       return reply.code(400).send({ error: 'invalid_page' });
@@ -163,6 +181,24 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
       .sendFile(relative(config.moduleRoot, lecture.pdfPath).replaceAll('\\', '/'), config.moduleRoot, { acceptRanges: true, maxAge: 0 });
   });
 
+  app.get<{ Params: { id: string } }>('/api/documents/:id/pdf', async (request, reply) => {
+    const document = registry.cryptography.documents.get(request.params.id);
+    if (!document || document.pageCount === null) return reply.code(404).send({ error: 'not_found' });
+    try {
+      await safePath(config.dataRoot, config.moduleRoot); await safePath(config.moduleRoot, document.path);
+      if (!(await stat(document.path)).isFile()) return reply.code(404).send({ error: 'not_found' });
+      return reply.type('application/pdf').header('X-Content-Type-Options', 'nosniff')
+        .sendFile(relative(config.moduleRoot, document.path).replaceAll('\\', '/'), config.moduleRoot, { acceptRanges: true, maxAge: 0 });
+    } catch { return reply.code(404).send({ error: 'not_found' }); }
+  });
+  app.post<{ Params: { id: string }; Body: { sourceSha256: string } }>('/api/documents/:id/accept-source', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['sourceSha256'], properties: { sourceSha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } } } },
+  }, async (request, reply) => {
+    if (!registry.cryptography.documents.has(request.params.id)) return reply.code(404).send({ error: 'not_found' });
+    if (!await registry.cryptography.accept(request.params.id, request.body.sourceSha256)) return reply.code(409).send({ error: 'source_changed_again', message: 'Quelle wurde erneut geändert. Bitte neu öffnen.' });
+    await scanRegistry(); return { sourceChanged: false };
+  });
+
   async function overview(): Promise<OverviewResponse> {
     const result = await scanRegistry();
     for (const module of result.modules) for (const summary of module.lectures) {
@@ -171,7 +207,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
       const [bookmark, completed, pageNotes] = await Promise.all([
         states.read(lecture), states.completed(lecture), notes.read(lecture).catch(() => undefined),
       ]);
-      const source = await sources.read(lecture).catch(() => ({ sourceChanged: false }));
+      const source = lecture.crypto ? { sourceChanged: summary.sourceChanged } : await sources.read(lecture).catch(() => ({ sourceChanged: false }));
       summary.sourceChanged = source.sourceChanged;
       if ('previousPageCount' in source) summary.previousPageCount = source.previousPageCount;
       summary.progress = {
@@ -180,7 +216,7 @@ export async function buildApp(config: AppConfig, opts: { logger?: boolean } = {
         ...(bookmark.exists ? { updatedAt: bookmark.state.updatedAt } : {}),
       };
       if (!completed && bookmark.exists && summary.pageCount !== null && (!result.resume || Date.parse(bookmark.state.updatedAt) > Date.parse(result.resume.updatedAt))) {
-        result.resume = { id: summary.id, title: summary.title, module: module.name, pageCount: summary.pageCount, lastPage: bookmark.state.lastPage, updatedAt: bookmark.state.updatedAt };
+        result.resume = { id: summary.id, title: summary.title, module: module.name, pageCount: summary.pageCount, lastPage: bookmark.state.lastPage, updatedAt: bookmark.state.updatedAt, ...(summary.viewKind ? { viewKind: summary.viewKind } : {}) };
       }
     }
     const missing = await orphans.list(); if (missing.length) result.orphans = missing;

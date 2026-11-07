@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { OverviewResponse } from '../shared/api';
 import { OrphanCard } from './OrphanCard';
-const LectureView = lazy(() => import('./LectureView').then((module) => ({ default: module.LectureView })));
+const LectureView = lazy(() => import('./LectureRoute').then((module) => ({ default: module.LectureRoute })));
 
 export function App() {
   const [hash, setHash] = useState(window.location.hash);
@@ -54,7 +54,8 @@ function Overview() {
         </button>
       </header>
       {overview?.resume && <section className="resume-card" aria-label="Weiter mit">
-        <div><strong>Weiter mit: {overview.resume.title}</strong><p>{overview.resume.module} · Folie {overview.resume.lastPage} von {overview.resume.pageCount}</p></div>
+        <div><strong>Weiter mit: {overview.resume.title}</strong><p>{overview.resume.module} · {overview.resume.viewKind === 'cryptography' && overview.resume.pageCount === 0
+          ? 'Lernskript und Quellen' : <>{overview.resume.viewKind === 'cryptography' ? 'Whiteboard-Seite' : 'Folie'} {overview.resume.lastPage} von {overview.resume.pageCount}</>}</p></div>
         <a href={`#vorlesung/${overview.resume.id}`}>Öffnen</a>
       </section>}
       <div aria-live="polite" aria-busy={loading}>
@@ -80,8 +81,10 @@ function Overview() {
                     <span className="lecture-title">{lecture.pageCount !== null ? <a href={`#vorlesung/${lecture.id}`}>{lecture.title}</a> : lecture.title}</span>
                     {lecture.pageCount !== null && <span className="page-count">{lecture.pageCount} {lecture.pageCount === 1 ? 'Seite' : 'Seiten'}</span>}
                     {lecture.progress && <span className="lecture-progress">
-                      {lecture.progress.completed ? <><span className="completed-check" aria-hidden="true">✓</span>{` erledigt${lecture.pageCount !== null ? ` · ${lecture.pageCount}/${lecture.pageCount} ${lecture.pageCount === 1 ? 'Folie' : 'Folien'}` : ''}`}</> : lecture.progress.maxPageVisited > 0 ? `bis Folie ${lecture.progress.maxPageVisited}/${lecture.pageCount ?? '?'}` : 'Noch nicht begonnen'}
-                      {' · '}{lecture.progress.noteCount === null ? 'Notizdatei prüfen' : `${lecture.progress.noteCount} ${lecture.progress.noteCount === 1 ? 'Notiz' : 'Notizen'} mit Inhalt`}
+                      {lecture.viewKind === 'cryptography' ? <>{lecture.progress.completed ? <><span className="completed-check" aria-hidden="true">✓</span> erledigt</> : lecture.progress.maxPageVisited > 0 ? `bis Whiteboard-Seite ${lecture.progress.maxPageVisited}/${lecture.pageCount ?? '?'}` : 'Noch nicht begonnen'} · {lecture.markdownAvailable ? 'Lernskript vorhanden' : 'Lernskript fehlt'}</> : <>
+                        {lecture.progress.completed ? <><span className="completed-check" aria-hidden="true">✓</span>{` erledigt${lecture.pageCount !== null ? ` · ${lecture.pageCount}/${lecture.pageCount} ${lecture.pageCount === 1 ? 'Folie' : 'Folien'}` : ''}`}</> : lecture.progress.maxPageVisited > 0 ? `bis Folie ${lecture.progress.maxPageVisited}/${lecture.pageCount ?? '?'}` : 'Noch nicht begonnen'}
+                        {' · '}{lecture.progress.noteCount === null ? 'Notizdatei prüfen' : `${lecture.progress.noteCount} ${lecture.progress.noteCount === 1 ? 'Notiz' : 'Notizen'} mit Inhalt`}
+                      </>}
                     </span>}
                     {lecture.error && <span className="bad">{lecture.error}</span>}
                     {lecture.sourceChanged && <span className="source-badge">⚠ PDF geändert – Zuordnung prüfen</span>}

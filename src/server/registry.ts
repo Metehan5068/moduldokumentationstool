@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import type { FastifyBaseLogger } from 'fastify';
-import type { OverviewResponse, LectureSummary } from '../shared/api.js';
+import type { OverviewResponse, LectureSummary, CryptographyContent } from '../shared/api.js';
 import type { AppConfig } from './config.js';
 import { containedPath, safePath, writeJson } from './files.js';
 import { WriteQueue } from './write-queue.js';
+import { CryptographyService } from './cryptography.js';
+
+export interface RegisteredLecture { pdfPath: string; module: string; summary: LectureSummary; crypto?: CryptographyContent; markdownPath?: string }
 
 const collator = new Intl.Collator('de', { numeric: true });
 export const naturalCompare = (a: string, b: string): number => collator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
@@ -52,9 +55,12 @@ export async function cachedMeta(path: string): Promise<Metadata | undefined> {
 
 export class Registry {
   private queue: Promise<unknown> = Promise.resolve();
-  private lectures = new Map<string, { pdfPath: string; module: string; summary: LectureSummary }>();
+  private lectures = new Map<string, RegisteredLecture>();
+  readonly cryptography: CryptographyService;
 
-  constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error'>, private readonly writes = new WriteQueue()) {}
+  constructor(private readonly config: AppConfig, private readonly logger: Pick<FastifyBaseLogger, 'error'>, private readonly writes = new WriteQueue()) {
+    this.cryptography = new CryptographyService(config, logger, writes);
+  }
 
   get(id: string) { return this.lectures.get(id); }
   all() { return [...this.lectures.values()]; }
@@ -68,13 +74,19 @@ export class Registry {
 
   private async scanFiles(): Promise<OverviewResponse> {
     const result: OverviewResponse = { modules: [] };
-    const next = new Map<string, { pdfPath: string; module: string; summary: LectureSummary }>();
+    const next = new Map<string, RegisteredLecture>();
     await safePath(this.config.dataRoot, this.config.moduleRoot);
     await safePath(this.config.dataRoot, this.config.notesRoot);
     const modules = (await entries(this.config.moduleRoot)).filter((entry) => entry.isDirectory()).sort((a, b) => naturalCompare(a.name, b.name));
     for (const module of modules) {
       const modulePath = containedPath(this.config.moduleRoot, module.name);
       await safePath(this.config.moduleRoot, modulePath);
+      if (module.name === 'Cryptography') {
+        const bundled = await this.cryptography.scan(module.name);
+        for (const lecture of bundled) next.set(lecture.summary.id, lecture);
+        result.modules.push({ name: module.name, lectures: bundled.map((lecture) => lecture.summary) });
+        continue;
+      }
       const lectures: LectureSummary[] = [];
       const files = (await entries(modulePath)).filter((entry) => entry.isFile() && /\.pdf$/i.test(entry.name)).sort((a, b) => naturalCompare(a.name, b.name));
       for (const file of files) {
@@ -139,6 +151,7 @@ export class Registry {
       result.modules.push({ name: module.name, lectures });
     }
     this.lectures = next;
+    if (!result.modules.some((module) => module.name === 'Cryptography')) this.cryptography.documents.clear();
     return result;
   }
 }

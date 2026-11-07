@@ -9,6 +9,9 @@ export interface HealthResponse {
 }
 
 export interface LectureSummary {
+  viewKind?: 'slides' | 'cryptography';
+  lectureNumber?: number;
+  markdownAvailable?: boolean;
   id: string;
   title: string;
   pageCount: number | null;
@@ -20,11 +23,12 @@ export interface LectureSummary {
 
 export interface OverviewResponse {
   modules: { name: string; lectures: LectureSummary[] }[];
-  resume?: { id: string; title: string; module: string; pageCount: number; lastPage: number; updatedAt: string };
+  resume?: { id: string; title: string; module: string; pageCount: number; lastPage: number; updatedAt: string; viewKind?: 'slides' | 'cryptography' };
   orphans?: OrphanSummary[];
 }
 
 export interface LectureResponse extends LectureSummary {
+  cryptography?: CryptographyContent;
   module: string;
   notes: Record<number, NoteValue>;
   readOnlyError?: NotesFileError;
@@ -32,6 +36,29 @@ export interface LectureResponse extends LectureSummary {
   completed: boolean;
   stateError?: string;
   sourceSha256?: string;
+}
+export interface SourceDocument {
+  id: string;
+  title: string;
+  kind: 'whiteboard' | 'script';
+  pageCount: number | null;
+  sourceSha256?: string;
+  sourceChanged?: boolean;
+  error?: string;
+}
+export interface Citation {
+  id: string;
+  documentId?: string;
+  page?: number;
+  error?: string;
+}
+export interface CryptographyContent {
+  documents: SourceDocument[];
+  whiteboardId?: string;
+  scriptId?: string;
+  markdown?: string;
+  citations: Citation[];
+  warnings: string[];
 }
 export interface OrphanSummary {
   id: string; module: string; title: string; noteCount: number | null;

@@ -31,6 +31,45 @@
 * { box-sizing: border-box; }
 * { scrollbar-width: thin; }
 body { margin: 0; background: var(--bg); color: var(--fg); }
+.crypto-view { height: 100dvh; overflow: hidden; }
+.crypto-panels { display: grid; grid-template-columns: minmax(0, var(--split, 50%)) 8px minmax(0, 1fr); flex: 1; min-height: 0; overflow: hidden; }
+.crypto-sources, .crypto-markdown { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; background: var(--surface); }
+.source-tabs, .markdown-toolbar { display: flex; gap: 8px; align-items: center; min-height: 48px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.source-tabs [aria-selected=true] { background: var(--primary-tint); color: var(--accent-text); border-color: var(--primary); }
+.markdown-toolbar { justify-content: space-between; }
+.markdown-toolbar span { color: var(--muted); font-size: 12px; }
+.source-document-title { padding: 8px 16px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.source-document-title button { margin-left: 8px; }
+.source-tab-panel, .source-document { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.source-tab-panel[hidden], .source-document[hidden] { display: none; }
+.source-pdf-scroll, .markdown-scroll { flex: 1; overflow: auto; min-height: 0; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.source-pdf-scroll { padding: 12px; }
+.source-page { margin-bottom: 16px; border: 2px solid transparent; border-radius: var(--r-md); }
+.source-page .slide-card { width: 100%; margin: 0; }
+.citation-target { border-color: var(--warn); box-shadow: 0 0 0 3px var(--tint-warn); }
+.markdown-scroll { padding: 24px; }
+.markdown-content { line-height: 1.75; overflow-wrap: anywhere; }
+.markdown-content h1 { font-size: 24px; line-height: 1.35; }
+.markdown-content h2 { font-size: 20px; margin-top: 32px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.markdown-content h3 { font-size: 16px; margin-top: 24px; }
+.markdown-content table { border-collapse: collapse; display: block; overflow-x: auto; max-width: 100%; margin: 20px 0; font-size: 13px; }
+.markdown-content th, .markdown-content td { border: 1px solid var(--border-strong); padding: 8px 12px; text-align: left; }
+.markdown-content th { background: var(--surface-2); }
+.markdown-content pre { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 16px; overflow-x: auto; font-size: 12px; line-height: 1.6; }
+.markdown-content code { font-family: Consolas, monospace; }
+.markdown-content blockquote { border-left: 3px solid var(--primary); margin-left: 0; padding-left: 16px; color: var(--muted); }
+.markdown-content details, .import-warnings { border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 16px; margin: 16px 0; }
+.markdown-content summary, .import-warnings summary { cursor: pointer; }
+.markdown-content .katex-display { overflow-x: auto; overflow-y: hidden; padding: 8px 0; }
+.markdown-content .mermaid-diagram { white-space: normal; }
+.mermaid-diagram svg { max-width: 100%; height: auto; }
+.citation-link { display: inline; min-height: 0; padding: 1px 5px; margin: 0 2px; font-size: 12px; line-height: 1.5; color: var(--accent-text); background: var(--primary-tint); vertical-align: baseline; }
+.citation-invalid { color: var(--warn); border-color: var(--warn); }
+.crypto-splitter { background: var(--border); cursor: col-resize; touch-action: none; }
+.crypto-splitter:hover, .crypto-splitter:focus-visible { background: var(--primary); }
+.reader-message { margin: 8px 16px; }
+.crypto-view > .source-warning { flex-shrink: 0; max-height: 100px; overflow: auto; }
+@media (max-width: 800px) { .markdown-scroll { padding: 12px; } .source-tabs { padding: 8px; } .source-tabs button { padding: 0 6px; } }
 ::selection { background: rgb(94 106 210 / 40%); }
 h1, h2 { letter-spacing: -0.01em; font-weight: 600; }
 a { color: var(--accent-text); text-decoration: none; transition: color var(--ease); }

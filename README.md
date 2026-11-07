@@ -43,6 +43,51 @@ npm install
 
 PDFs und Notizen gehören nicht in dieses Repo. `.gitignore` schließt `module/`, `notes/` und `*.pdf` zusätzlich aus.
 
+## Cryptography: Whiteboard und Lernskript
+
+Das Modul `Cryptography` erhält eine eigene Leseansicht. Lege die Materialien so ab:
+
+```text
+module/Cryptography/
+├─ mini-script.pdf
+├─ whiteboard/                    # alternativ: Summary/
+│  ├─ Lecture 1 - Thema.pdf
+│  └─ Lecture 2 - Weiteres Thema.pdf
+└─ mds/
+   └─ Lecture 1.md
+```
+
+Die Lecture-Nummer verbindet Whiteboard und Markdown; der beschreibende Dateiname
+kann sich ändern, ohne Erledigt-Status und Lecture-Identität zu verlieren. Fehlende
+Markdown-Dateien verhindern das Öffnen nicht. Nach Änderungen „Neu einlesen“ wählen.
+Das gemeinsame Mini-Skript erscheint in jeder Lecture als Reiter, nicht als eigene
+Vorlesung. Die rechte Hälfte zeigt das Markdown als Leseansicht mit Tabellen,
+Formeln (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`), Mermaid-Diagrammen und Selbsttests.
+Bearbeitung erfolgt weiterhin direkt in der Markdown-Datei.
+
+Quellenbelege gemäß Citation Contract v1 werden automatisch verknüpft:
+
+```markdown
+Die Definition steht im Skript. [8][src-8]
+
+[src-8]: <../mini-script.pdf#page=2>
+```
+
+Belege öffnen links den richtigen Reiter und die physische PDF-Seite (1-basiert),
+während die rechte Leseposition erhalten bleibt. Relative Pfade, URL-kodierte
+Dateinamen und Leerzeichen werden unterstützt. Eindeutige Dateinamen und der alte
+Zusatz ` - Summary` werden ebenfalls erkannt. Ungültige oder mehrdeutige Verweise
+stehen unter „Importhinweise“. Die App ergänzt keine inhaltlichen Belege und
+verändert keine Originaldateien. Externe Links werden erst beim Anklicken geöffnet;
+externe Bilder und aktive HTML-Inhalte werden nicht geladen.
+
+Reiter und Lesepositionen werden pro Lecture gespeichert. `Strg+G` und `Alt+↑/↓`
+navigieren im aktiven PDF. Der automatische Fortschritt zählt nur das eigene
+Whiteboard nach drei Sekunden Sichtbarkeit; der Erledigt-Haken bleibt manuell.
+Gemeinsame PDF-Metadaten und extrahierte Texte liegen einmalig unter
+`notes/.documents/<Dokument-ID>/`; Lecture-Zustände unter
+`notes/Cryptography/Lecture N/`. Geänderte PDFs erfordern eine Quellenprüfung.
+
 ## Modulübersicht (Phase 1)
 
 Die Startseite liest direkte Unterordner von `module/` als Module ein und zeigt deren
